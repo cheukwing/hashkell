@@ -1,3 +1,4 @@
+-- Adapted from Write You A Haskell
 module Simple.Syntax where
 
 type Name = String

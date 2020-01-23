@@ -1,7 +1,7 @@
 {
+-- Adapted from Write You A Haskell
 module Simple.Parser (
-    parseExpr,
-    parseTokens,
+    parseExpr
 ) where
 
 import Simple.Lexer
@@ -59,6 +59,4 @@ parseExpr input = runExcept $ do
   tokenStream <- scanTokens input
   expr tokenStream
 
-parseTokens :: String -> Either String [Token]
-parseTokens = runExcept . scanTokens
 }
