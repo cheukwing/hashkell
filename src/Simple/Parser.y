@@ -14,6 +14,9 @@ import Control.Monad.Except
 %tokentype { Token }
 
 %token
+    if    { TokenIf }
+    then  { TokenThen }
+    else  { TokenElse }
     NUM   { TokenNum $$ }
     VAR   { TokenSym $$ }
     '=='  { TokenEq }
@@ -21,9 +24,6 @@ import Control.Monad.Except
     '-'   { TokenSub }
     '('   { TokenLParen }
     ')'   { TokenRParen }
-    if    { TokenIf }
-    then  { TokenThen }
-    else  { TokenElse }
 
 %monad { Except String } { (>>=) } { return }
 %error { parseError }

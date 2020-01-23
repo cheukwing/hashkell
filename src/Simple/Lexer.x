@@ -23,6 +23,9 @@ tokens :-
 
     "--".*                        ;
 
+    if                            { \s -> TokenIf }
+    then                          { \s -> TokenThen }
+    else                          { \s -> TokenElse }
     $digit+                       { \s -> TokenNum (read s) }
     $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
     "=="                          { \s -> TokenEq }
@@ -30,22 +33,19 @@ tokens :-
     [\-]                          { \s -> TokenSub }
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
-    if                            { \s -> TokenIf }
-    then                          { \s -> TokenThen }
-    else                          { \s -> TokenElse }
 
 {
 data Token
-    = TokenNum Int
+    = TokenIf
+    | TokenThen
+    | TokenElse
+    | TokenNum Int
     | TokenSym String
     | TokenEq
     | TokenAdd
     | TokenSub
     | TokenLParen
     | TokenRParen
-    | TokenIf
-    | TokenThen
-    | TokenElse
     | TokenEOF
     deriving (Eq, Show)
 
