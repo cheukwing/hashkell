@@ -1,7 +1,7 @@
 {
 -- Adapted from Write You A Haskell
 module Simple.Parser (
-    parseExpr
+    parseProg
 ) where
 
 import Simple.Lexer
@@ -17,25 +17,43 @@ import Control.Monad.Except
     if    { TokenIf }
     then  { TokenThen }
     else  { TokenElse }
+    let   { TokenLet }
+    in    { TokenIn }
     NUM   { TokenNum $$ }
     VAR   { TokenSym $$ }
+    '='   { TokenDef }
     '=='  { TokenEq }
     '+'   { TokenAdd }
     '-'   { TokenSub }
     '('   { TokenLParen }
     ')'   { TokenRParen }
+    '{'   { TokenLBrace }
+    '}'   { TokenRBrace }
+    ';'   { TokenEnd }
 
 %monad { Except String } { (>>=) } { return }
 %error { parseError }
 
-%name expr
+%name prog
 
 %left '=='
 %left '+' '-'
 %%
 
+Prog : {- empty -}                 { [] }
+     | Func ';' Prog               { $1 : $3 }
+
+Func : VAR Args '=' Expr           { Func $1 $2 $4 }
+
+Args : {- empty -}                 { [] }
+     | VAR Args                    { $1 : $2 }
+
 Expr : if Expr then Expr else Expr { If $2 $4 $6 }
+     | let '{' Defs '}' in Expr    { Let $3 $6 }     
      | Form                        { $1 }
+
+Defs : {- empty -}                 { [] }
+     | VAR '=' Expr ';' Defs       { (Def $1 $3) : $5 }
 
 Form : Form '+' Form               { Op Add $1 $3 }
      | Form '-' Form               { Op Sub $1 $3 }
@@ -51,12 +69,14 @@ Atom : '(' Expr ')'                { $2 }
 
 {
 parseError :: [Token] -> Except String a
-parseError (l:ls) = throwError (show l)
-parseError [] = throwError "Unexpected end of Input"
+parseError (l : ls) 
+    = throwError (show l)
+parseError [] 
+    = throwError "Unexpected end of Input"
 
-parseExpr :: String -> Either String Expr
-parseExpr input = runExcept $ do
+parseProg :: String -> Either String Prog
+parseProg input = runExcept $ do
   tokenStream <- scanTokens input
-  expr tokenStream
+  prog tokenStream
 
 }

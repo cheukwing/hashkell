@@ -28,26 +28,38 @@ tokens :-
     if                            { \s -> TokenIf }
     then                          { \s -> TokenThen }
     else                          { \s -> TokenElse }
+    let                           { \s -> TokenLet }
+    in                            { \s -> TokenIn }
     $digit+                       { \s -> TokenNum (read s) }
     $lower [$alpha $digit \_ \']* { \s -> TokenSym s }
+    "="                           { \s -> TokenDef }
     "=="                          { \s -> TokenEq }
     [\+]                          { \s -> TokenAdd }
     [\-]                          { \s -> TokenSub }
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
+    \{                            { \s -> TokenLBrace }
+    \}                            { \s -> TokenRBrace }
+    ";"                           { \s -> TokenEnd }
 
 {
 data Token
     = TokenIf
     | TokenThen
     | TokenElse
+    | TokenLet
+    | TokenIn
     | TokenNum Int
     | TokenSym String
+    | TokenDef
     | TokenEq
     | TokenAdd
     | TokenSub
     | TokenLParen
     | TokenRParen
+    | TokenLBrace
+    | TokenRBrace
+    | TokenEnd
     | TokenEOF
     deriving (Eq, Show)
 

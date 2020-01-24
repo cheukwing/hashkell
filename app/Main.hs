@@ -1,15 +1,14 @@
 -- Adapted from Write You A Haskell
 module Main where
 
-import Simple.Syntax (Expr)
-import Simple.Parser (parseExpr)
+import Simple.Parser (parseProg)
 
 import Control.Monad.Trans
 import System.Console.Haskeline
 
 process :: String -> IO ()
 process input =
-  case parseExpr input of
+  case parseProg input of
     Left err -> do
         putStrLn "Parse Error:"
         print err

@@ -3,15 +3,26 @@ module Simple.Syntax where
 
 type Name = String
 
+type Prog = [Func]
+
+data Func 
+    = Func Name [Name] Expr
+    deriving (Eq, Show)
+
 data Expr
     = If Expr Expr Expr
+    | Let [Def] Expr
     | App Expr Expr
     | Var Name
     | Lit Lit
     | Op BinOp Expr Expr
     deriving (Eq, Show)
 
-data Lit
+data Def
+    = Def Name Expr
+    deriving (Eq, Show)
+
+newtype Lit
     = LInt Int
     deriving (Eq, Show, Ord)
 
