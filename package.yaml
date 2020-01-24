@@ -24,6 +24,8 @@ dependencies:
   - array
   - mtl
   - haskeline
+  - tasty
+  - tasty-hunit
 
 library:
   source-dirs: src
