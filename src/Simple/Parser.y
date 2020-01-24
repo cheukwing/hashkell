@@ -4,6 +4,7 @@ module Simple.Parser (
     parseProg
 ) where
 
+import Prelude hiding (EQ, GT, LT)
 import Simple.Lexer
 import Simple.Syntax
 
@@ -19,12 +20,20 @@ import Control.Monad.Except
     else  { TokenElse }
     let   { TokenLet }
     in    { TokenIn }
+    True  { TokenTrue }
+    False { TokenFalse }
     NUM   { TokenNum $$ }
     VAR   { TokenSym $$ }
     '='   { TokenDef }
-    '=='  { TokenEq }
+    '=='  { TokenEQ }
+    '<'   { TokenLT }
+    '>'   { TokenGT }
+    '<='  { TokenLTE }
+    '>='  { TokenGTE }
     '+'   { TokenAdd }
     '-'   { TokenSub }
+    '*'   { TokenMul }
+    '/'   { TokenDiv }
     '('   { TokenLParen }
     ')'   { TokenRParen }
     '{'   { TokenLBrace }
@@ -36,8 +45,8 @@ import Control.Monad.Except
 
 %name prog
 
-%left '=='
-%left '+' '-'
+%left '==' '>' '<' '<=' '>='
+%left '+' '-' '*' '/'
 %%
 
 Prog : {- empty -}                 { [] }
@@ -57,7 +66,13 @@ Defs : {- empty -}                 { [] }
 
 Form : Form '+' Form               { Op Add $1 $3 }
      | Form '-' Form               { Op Sub $1 $3 }
-     | Form '==' Form              { Op Eq $1 $3 }
+     | Form '*' Form               { Op Mul $1 $3 }
+     | Form '/' Form               { Op Div $1 $3 }
+     | Form '==' Form              { Op EQ $1 $3 }
+     | Form '<' Form               { Op LT $1 $3 }
+     | Form '>' Form               { Op GT $1 $3 }
+     | Form '<=' Form              { Op LTE $1 $3 }
+     | Form '>=' Form              { Op GTE $1 $3 }
      | Fact                        { $1 }
 
 Fact : Fact Atom                   { App $1 $2 }
@@ -66,6 +81,9 @@ Fact : Fact Atom                   { App $1 $2 }
 Atom : '(' Expr ')'                { $2 }
      | NUM                         { Lit (LInt $1) }
      | VAR                         { Var $1 }
+     | True                        { Lit (LBool True) }
+     | False                       { Lit (LBool False) }
+
 
 {
 parseError :: [Token] -> Except String a

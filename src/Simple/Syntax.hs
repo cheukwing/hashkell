@@ -22,9 +22,10 @@ data Def
     = Def Name Expr
     deriving (Eq, Show)
 
-newtype Lit
+data Lit
     = LInt Int
+    | LBool Bool
     deriving (Eq, Show, Ord)
 
-data BinOp = Add | Sub | Eq
+data BinOp = Add | Sub | Mul | Div | EQ | LT | GT | LTE | GTE
     deriving (Eq, Show, Ord)

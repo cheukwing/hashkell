@@ -30,12 +30,20 @@ tokens :-
     else                          { \s -> TokenElse }
     let                           { \s -> TokenLet }
     in                            { \s -> TokenIn }
+    True                          { \s -> TokenTrue }
+    False                         { \s -> TokenFalse }
     $digit+                       { \s -> TokenNum (read s) }
     $lower [$alpha $digit \_ \']* { \s -> TokenSym s }
     "="                           { \s -> TokenDef }
-    "=="                          { \s -> TokenEq }
+    "=="                          { \s -> TokenEQ }
+    "<"                           { \s -> TokenLT }
+    ">"                           { \s -> TokenGT }
+    "<="                          { \s -> TokenLTE }
+    ">="                          { \s -> TokenGTE }
     [\+]                          { \s -> TokenAdd }
     [\-]                          { \s -> TokenSub }
+    [\*]                          { \s -> TokenMul }
+    [\/]                          { \s -> TokenDiv }
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
     \{                            { \s -> TokenLBrace }
@@ -49,16 +57,14 @@ data Token
     | TokenElse
     | TokenLet
     | TokenIn
+    | TokenTrue
+    | TokenFalse
     | TokenNum Int
     | TokenSym String
     | TokenDef
-    | TokenEq
-    | TokenAdd
-    | TokenSub
-    | TokenLParen
-    | TokenRParen
-    | TokenLBrace
-    | TokenRBrace
+    | TokenEQ     | TokenLT     | TokenGT     | TokenLTE | TokenGTE
+    | TokenAdd    | TokenSub    | TokenMul    | TokenDiv
+    | TokenLParen | TokenRParen | TokenLBrace | TokenRBrace
     | TokenEnd
     | TokenEOF
     deriving (Eq, Show)
