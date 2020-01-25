@@ -45,6 +45,8 @@ tokens :-
     ">"                           { \s -> TokenGT }
     "<="                          { \s -> TokenLTE }
     ">="                          { \s -> TokenGTE }
+    "&&"                          { \s -> TokenAnd }
+    "||"                          { \s -> TokenOr }
     [\+]                          { \s -> TokenAdd }
     [\-]                          { \s -> TokenSub }
     [\*]                          { \s -> TokenMul }
@@ -70,7 +72,7 @@ data Token
     | TokenNum Int
     | TokenSym String
     | TokenDef
-    | TokenEQ     | TokenLT     | TokenGT     | TokenLTE | TokenGTE
+    | TokenEQ     | TokenLT     | TokenGT     | TokenLTE | TokenGTE | TokenAnd | TokenOr
     | TokenAdd    | TokenSub    | TokenMul    | TokenDiv
     | TokenLParen | TokenRParen | TokenLBrace | TokenRBrace
     | TokenEnd

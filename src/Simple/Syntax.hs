@@ -11,7 +11,8 @@ data Decl
     deriving (Eq, Show)
 
 data Complexity 
-    = Factorial 
+    = None
+    | Factorial 
     | Polynomial Int
     deriving(Eq, Show)
 
@@ -33,5 +34,5 @@ data Lit
     | LBool Bool
     deriving (Eq, Show, Ord)
 
-data BinOp = Add | Sub | Mul | Div | EQ | LT | GT | LTE | GTE
+data BinOp = Add | Sub | Mul | Div | EQ | LT | GT | LTE | GTE | And | Or
     deriving (Eq, Show, Ord)

@@ -34,6 +34,8 @@ import Control.Monad.Except
     '>'   { TokenGT }
     '<='  { TokenLTE }
     '>='  { TokenGTE }
+    '&&'  { TokenAnd }
+    '||'  { TokenOr }
     '+'   { TokenAdd }
     '-'   { TokenSub }
     '*'   { TokenMul }
@@ -49,8 +51,11 @@ import Control.Monad.Except
 
 %name prog
 
-%left '==' '>' '<' '<=' '>='
-%left '+' '-' '*' '/'
+%right '||'
+%right '&&'
+%nonassoc '==' '>' '<' '<=' '>='
+%left '+' '-'
+%left '*' '/'
 %%
 
 Prog : {- empty -}                 { [] }
@@ -60,6 +65,7 @@ Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
      | '#' VAR Cplx                { Complexity $2 $3 }
 
 Cplx : {- empty -}                 { [] }
+     | '|' Cplx                    { None : $2 }
      | '|' 'n!' Cplx               { Factorial : $3 }
      | '|' POLY Cplx               { Polynomial $2 : $3 }
 
@@ -82,6 +88,8 @@ Form : Form '+' Form               { Op Add $1 $3 }
      | Form '>' Form               { Op GT $1 $3 }
      | Form '<=' Form              { Op LTE $1 $3 }
      | Form '>=' Form              { Op GTE $1 $3 }
+     | Form '&&' Form              { Op And $1 $3 }
+     | Form '||' Form              { Op Or $1 $3 }
      | Fact                        { $1 }
 
 Fact : Fact Atom                   { App $1 $2 }
