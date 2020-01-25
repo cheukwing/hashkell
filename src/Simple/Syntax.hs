@@ -15,7 +15,7 @@ data FuncData = FuncData Name [Name] Expr
 
 data Complexity 
     = None
-    | Factorial 
+    | Exponential
     | Polynomial Int
     deriving(Eq, Show)
 

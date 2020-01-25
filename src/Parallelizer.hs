@@ -49,7 +49,7 @@ splitCondition ct
         -- Pre: no 'None' complexity
         toCondition m None 
             = error "cannot convert None complexity to condition"
-        toCondition m Factorial
-            = Op GT (Var m) (Lit (LInt 5))
+        toCondition m Exponential
+            = Op GT (Var m) (Lit (LInt 6))
         toCondition m (Polynomial n)
             = Op GT (head $ take n $ iterate (\mult -> Op Mul mult (Var m)) (Var m)) (Lit (LInt 100))

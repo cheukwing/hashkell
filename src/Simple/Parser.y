@@ -17,7 +17,7 @@ import Control.Monad.Except
 %token
     '#'   { TokenComplexity }
     '|'   { TokenDelimiter }
-    'n!'  { TokenFactorial }
+    '2^n' { TokenExponential }
     POLY  { TokenPolynomial $$ }
     if    { TokenIf }
     then  { TokenThen }
@@ -66,7 +66,7 @@ Decl : VAR Args '=' Expr           { Func (FuncData $1 $2 $4) }
 
 Cplx : {- empty -}                 { [] }
      | '|' Cplx                    { None : $2 }
-     | '|' 'n!' Cplx               { Factorial : $3 }
+     | '|' '2^n' Cplx              { Exponential : $3 }
      | '|' POLY Cplx               { Polynomial $2 : $3 }
 
 Args : {- empty -}                 { [] }

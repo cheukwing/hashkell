@@ -1,4 +1,4 @@
-# fib | n!;
+# fib | 2^n;
 fib n = 
     if n == 0
         then 1

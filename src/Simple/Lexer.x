@@ -27,7 +27,7 @@ tokens :-
 
     "#"                           { \s -> TokenComplexity }
     "|"                           { \s -> TokenDelimiter }
-    "n!"                          { \s -> TokenFactorial }
+    "2^n"                         { \s -> TokenExponential }
     "n^" $digit+                  { \s -> TokenPolynomial $ (read . drop 2) s }
 
     if                            { \s -> TokenIf }
@@ -61,7 +61,7 @@ tokens :-
 data Token
     = TokenComplexity
     | TokenDelimiter
-    | TokenFactorial | TokenPolynomial Int
+    | TokenExponential | TokenPolynomial Int
     | TokenIf
     | TokenThen
     | TokenElse
