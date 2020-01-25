@@ -26,6 +26,7 @@ dependencies:
   - haskeline
   - tasty
   - tasty-hunit
+  - containers >= 0.6.0.1
 
 library:
   source-dirs: src

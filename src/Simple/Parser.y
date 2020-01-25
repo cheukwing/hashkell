@@ -61,7 +61,7 @@ import Control.Monad.Except
 Prog : {- empty -}                 { [] }
      | Decl ';' Prog               { $1 : $3 }
 
-Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
+Decl : VAR Args '=' Expr           { Func (FuncData $1 $2 $4) }
      | '#' VAR Cplx                { Complexity $2 $3 }
 
 Cplx : {- empty -}                 { [] }

@@ -6,8 +6,11 @@ type Name = String
 type Prog = [Decl]
 
 data Decl
-    = Func Name [Name] Expr
+    = Func FuncData
     | Complexity Name [Complexity]
+    deriving (Eq, Show)
+
+data FuncData = FuncData Name [Name] Expr
     deriving (Eq, Show)
 
 data Complexity 
