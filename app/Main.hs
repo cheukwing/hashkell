@@ -30,8 +30,10 @@ process input =
 parseArgs :: [String] -> IO ([Flag], [String])
 parseArgs argv = 
     case getOpt Permute options argv of
-        (o,n,[]  ) -> return (o,n)
-        (_,_,errs) -> ioError (userError (concat errs ++ usageInfo header options))
+        (o, n, []) -> 
+            return (o,n)
+        (_, _, errs) -> 
+            ioError (userError (concat errs ++ usageInfo header options))
     where header = "Usage: ic [OPTION...] files..."
 
 main :: IO ()
@@ -39,16 +41,14 @@ main = do
     (_, fs) <- getArgs >>= parseArgs
     case fs of
         [] -> 
-            runInputT defaultSettings loop
+            runInputT defaultSettings interactiveLoop
         files -> 
-            processAll files
+            processAllFiles files
     where
-        loop = do
+        interactiveLoop = do
             minput <- getInputLine "Happy> "
             case minput of
                 Nothing -> outputStrLn "Goodbye."
-                Just input -> liftIO (process input) >> loop
-        processAll [] = putStrLn "Done."
-        processAll (x : xs) = do 
-            contents <- readFile x
-            liftIO (process contents) >> processAll xs
+                Just input -> liftIO (process input) >> interactiveLoop
+        processAllFiles = foldr (\ x -> (>>) (liftIO (readFile x >>= process))) 
+                        (putStrLn "Done.")
