@@ -15,6 +15,10 @@ import Control.Monad.Except
 %tokentype { Token }
 
 %token
+    '#'   { TokenComplexity }
+    '|'   { TokenDelimiter }
+    'n!'  { TokenFactorial }
+    POLY  { TokenPolynomial $$ }
     if    { TokenIf }
     then  { TokenThen }
     else  { TokenElse }
@@ -50,9 +54,14 @@ import Control.Monad.Except
 %%
 
 Prog : {- empty -}                 { [] }
-     | Func ';' Prog               { $1 : $3 }
+     | Decl ';' Prog               { $1 : $3 }
 
-Func : VAR Args '=' Expr           { Func $1 $2 $4 }
+Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
+     | '#' VAR Cplx                { Complexity $2 $3 }
+
+Cplx : {- empty -}                 { [] }
+     | '|' 'n!' Cplx               { Factorial : $3 }
+     | '|' POLY Cplx               { Polynomial $2 : $3 }
 
 Args : {- empty -}                 { [] }
      | VAR Args                    { $1 : $2 }

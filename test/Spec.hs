@@ -10,17 +10,23 @@ tests :: TestTree
 tests = testGroup "Tests" [ parserTests ]
 
 parserTests = testGroup "Parser tests"
-    [ testCase "function definition literal" $
+    [ testCase "parses simple function" $
         parseProg "a = 1;" @?= Right [Func "a" [] (Lit (LInt 1))]
-    , testCase "multiple function definition" $
+    , testCase "parses multiple function definitions" $
         parseProg "a = 1;\nb = 2;" @?= 
             Right [ Func "a" [] (Lit (LInt 1))
                   , Func "b" [] (Lit (LInt 2))
                   ]
-    , testCase "function definition addition" $
+    , testCase "parses addition" $
         parseProg "a = 1 + 2;" @?= 
             Right [Func "a" [] (Op Add (Lit (LInt 1)) (Lit (LInt 2)))]
-    , testCase "function definition application" $
+    , testCase "parses function application" $
         parseProg "a = b c d;" @?= 
             Right [Func "a" [] (App (App (Var "b") (Var "c")) (Var "d"))]
+    , testCase "ignores comment and parses function" $
+        parseProg "-- some comment here\n a = 1;" @?=
+            Right [Func "a" [] (Lit (LInt 1))]
+    , testCase "parses arguments" $
+        parseProg "foobar a b c = a;" @?=
+            Right [Func "foobar" ["a", "b", "c"] (Var "a")]
     ]

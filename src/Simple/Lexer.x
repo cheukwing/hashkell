@@ -25,6 +25,11 @@ tokens :-
 
     "--".*                        ;
 
+    "#"                           { \s -> TokenComplexity }
+    "|"                           { \s -> TokenDelimiter }
+    "n!"                          { \s -> TokenFactorial }
+    "n^" $digit+                  { \s -> TokenPolynomial $ (read . drop 2) s }
+
     if                            { \s -> TokenIf }
     then                          { \s -> TokenThen }
     else                          { \s -> TokenElse }
@@ -52,7 +57,10 @@ tokens :-
 
 {
 data Token
-    = TokenIf
+    = TokenComplexity
+    | TokenDelimiter
+    | TokenFactorial | TokenPolynomial Int
+    | TokenIf
     | TokenThen
     | TokenElse
     | TokenLet

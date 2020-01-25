@@ -3,11 +3,17 @@ module Simple.Syntax where
 
 type Name = String
 
-type Prog = [Func]
+type Prog = [Decl]
 
-data Func 
+data Decl
     = Func Name [Name] Expr
+    | Complexity Name [Complexity]
     deriving (Eq, Show)
+
+data Complexity 
+    = Factorial 
+    | Polynomial Int
+    deriving(Eq, Show)
 
 data Expr
     = If Expr Expr Expr
