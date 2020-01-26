@@ -6,18 +6,9 @@ type Name = String
 type Prog = [Decl]
 
 data Decl
-    = Func FuncData
-    | Complexity Name [Complexity]
+    = Func Name [Name] Expr
+    | Cplx Name Expr
     deriving (Eq, Show)
-
-data FuncData = FuncData Name [Name] Expr
-    deriving (Eq, Show)
-
-data Complexity 
-    = None
-    | Exponential
-    | Polynomial Int
-    deriving(Eq, Show)
 
 data Expr
     = If Expr Expr Expr
@@ -37,5 +28,5 @@ data Lit
     | LBool Bool
     deriving (Eq, Show, Ord)
 
-data BinOp = Add | Sub | Mul | Div | EQ | LT | GT | LTE | GTE | And | Or
+data BinOp = Add | Sub | Mul | Div | Exp | EQ | LT | GT | LTE | GTE | And | Or
     deriving (Eq, Show, Ord)

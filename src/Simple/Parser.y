@@ -15,10 +15,7 @@ import Control.Monad.Except
 %tokentype { Token }
 
 %token
-    '#'   { TokenComplexity }
-    '|'   { TokenDelimiter }
-    '2^n' { TokenExponential }
-    POLY  { TokenPolynomial $$ }
+    '##'  { TokenComplexity }
     if    { TokenIf }
     then  { TokenThen }
     else  { TokenElse }
@@ -40,6 +37,7 @@ import Control.Monad.Except
     '-'   { TokenSub }
     '*'   { TokenMul }
     '/'   { TokenDiv }
+    '^'   { TokenExp }
     '('   { TokenLParen }
     ')'   { TokenRParen }
     '{'   { TokenLBrace }
@@ -56,18 +54,14 @@ import Control.Monad.Except
 %nonassoc '==' '>' '<' '<=' '>='
 %left '+' '-'
 %left '*' '/'
+%left '^'
 %%
 
 Prog : {- empty -}                 { [] }
      | Decl ';' Prog               { $1 : $3 }
 
-Decl : VAR Args '=' Expr           { Func (FuncData $1 $2 $4) }
-     | '#' VAR Cplx                { Complexity $2 $3 }
-
-Cplx : {- empty -}                 { [] }
-     | '|' Cplx                    { None : $2 }
-     | '|' '2^n' Cplx              { Exponential : $3 }
-     | '|' POLY Cplx               { Polynomial $2 : $3 }
+Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
+     | VAR '##' Expr               { Cplx $1 $3 }
 
 Args : {- empty -}                 { [] }
      | VAR Args                    { $1 : $2 }
@@ -83,6 +77,7 @@ Form : Form '+' Form               { Op Add $1 $3 }
      | Form '-' Form               { Op Sub $1 $3 }
      | Form '*' Form               { Op Mul $1 $3 }
      | Form '/' Form               { Op Div $1 $3 }
+     | Form '^' Form               { Op Exp $1 $3 }
      | Form '==' Form              { Op EQ $1 $3 }
      | Form '<' Form               { Op LT $1 $3 }
      | Form '>' Form               { Op GT $1 $3 }

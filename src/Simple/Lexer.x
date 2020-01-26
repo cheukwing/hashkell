@@ -25,10 +25,7 @@ tokens :-
 
     "--".*                        ;
 
-    "#"                           { \s -> TokenComplexity }
-    "|"                           { \s -> TokenDelimiter }
-    "2^n"                         { \s -> TokenExponential }
-    "n^" $digit+                  { \s -> TokenPolynomial $ (read . drop 2) s }
+    "##"                          { \s -> TokenComplexity }
 
     if                            { \s -> TokenIf }
     then                          { \s -> TokenThen }
@@ -51,6 +48,7 @@ tokens :-
     [\-]                          { \s -> TokenSub }
     [\*]                          { \s -> TokenMul }
     [\/]                          { \s -> TokenDiv }
+    [\^]                          { \s -> TokenExp}
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
     \{                            { \s -> TokenLBrace }
@@ -60,8 +58,6 @@ tokens :-
 {
 data Token
     = TokenComplexity
-    | TokenDelimiter
-    | TokenExponential | TokenPolynomial Int
     | TokenIf
     | TokenThen
     | TokenElse
@@ -73,7 +69,7 @@ data Token
     | TokenSym String
     | TokenDef
     | TokenEQ     | TokenLT     | TokenGT     | TokenLTE | TokenGTE | TokenAnd | TokenOr
-    | TokenAdd    | TokenSub    | TokenMul    | TokenDiv
+    | TokenAdd    | TokenSub    | TokenMul    | TokenDiv | TokenExp
     | TokenLParen | TokenRParen | TokenLBrace | TokenRBrace
     | TokenEnd
     | TokenEOF
