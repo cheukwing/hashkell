@@ -8,6 +8,7 @@ import qualified Data.Set as Set
 
 type FunctionDefn = Expr
 type FunctionCplx = Expr
+-- TODO: consider using maybes for defn and cplx
 type FunctionData = ([Name], FunctionDefn, FunctionCplx)
 type FunctionTable = Map.Map Name FunctionData
 
@@ -64,6 +65,27 @@ freeVariables Lit{}
     = Set.empty
 freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
+
+splitFunctions :: FunctionTable -> FunctionTable
+splitFunctions 
+    = Map.foldlWithKey splitFunction Map.empty
+    where
+        splitFunction :: FunctionTable -> Name -> FunctionData -> FunctionTable
+        splitFunction ft name fd @ (_ , _, Lit{})
+            = Map.insert name fd ft
+        splitFunction ft name fd @ (args, defn, cplx)
+            = ( Map.insert name start 
+              . Map.insert (name ++ "_seq") fd 
+              . Map.insert (name ++ "_par") fd
+              ) ft
+            where
+                callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
+                start          = (args, If (Op LT cplx (Lit (LInt 100)))
+                                                (callFunction $ name ++ "_seq")
+                                                (callFunction $ name ++ "_par")
+                                 , cplx)
+            
+
 
 -- splitFunction takes a function, and splits it into multiple functions if
 -- it has a time complexity annotation.
