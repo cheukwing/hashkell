@@ -1,5 +1,8 @@
 import Simple.Parser (parseProg)
 import Simple.Syntax
+import Parallelizer (buildFunctionTable, splitFunction, splitCondition)
+
+import qualified Data.Map.Strict as Map
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -13,6 +16,7 @@ tests = testGroup "Tests"
             , splitFunctionTests
             , splitConditionTests
             ]
+
 
 parserTests = testGroup "Parser tests"
     [ testCase "parses simple function" $
@@ -37,13 +41,44 @@ parserTests = testGroup "Parser tests"
             Right [Func (FuncData "foobar" ["a", "b", "c"] (Var "a"))]
     ]
 
-buildFunctionTableTests = testGroup "buildFunctionTable test"
+
+buildFunctionTableTests = testGroup "buildFunctionTable tests"
+    [ testCase "creates entry for just complexity" $
+        buildFunctionTable [Complexity "a" [Polynomial 1, Exponential]] @?=
+          Map.fromList [("a", [("?", Polynomial 1), ("?", Exponential)])]  
+    , testCase "creates entry for just function" $
+        buildFunctionTable [Func (FuncData "a" ["b", "c"] (Lit (LInt 1)))] @?=
+          Map.fromList [("a", [("b", None), ("c", None)])]  
+    , testCase "updates entry for function" $
+        buildFunctionTable 
+            [ Complexity "a" [Polynomial 1, Exponential]
+            , Func (FuncData "a" ["b", "c"] (Lit (LInt 1)))
+            ] @?=
+          Map.fromList [("a", [("b", Polynomial 1), ("c", Exponential)])]  
+    , testCase "updates entry for complexity" $
+        buildFunctionTable 
+            [ Func (FuncData "a" ["b", "c"] (Lit (LInt 1)))
+            , Complexity "a" [Polynomial 1, Exponential]
+            ] @?=
+          Map.fromList [("a", [("b", Polynomial 1), ("c", Exponential)])]  
+    , testCase "does not drop unknown arg complexities" $
+        buildFunctionTable 
+            [ Func (FuncData "a" ["b", "c", "d"] (Lit (LInt 1)))
+            , Complexity "a" [Polynomial 1, Exponential]
+            ] @?=
+          Map.fromList [("a", [("b", Polynomial 1), ("c", Exponential), ("d", None)])]  
+    , testCase "does drop extra complexities not corresponding to an arg" $
+        buildFunctionTable 
+            [ Complexity "a" [Polynomial 1, Exponential, Polynomial 2]
+            , Func (FuncData "a" ["b", "c"] (Lit (LInt 1)))
+            ] @?=
+          Map.fromList [("a", [("b", Polynomial 1), ("c", Exponential)])]  
+    ]
+
+
+splitFunctionTests = testGroup "splitFunction tests"
     []
 
 
-splitFunctionTests = testGroup "splitFunction test"
-    []
-
-
-splitConditionTests = testGroup "splitCondition test"
+splitConditionTests = testGroup "splitCondition tests"
     []

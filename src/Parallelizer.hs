@@ -16,10 +16,12 @@ buildFunctionTable
         buildFunctionTable' :: FunctionTable -> Decl -> FunctionTable
         buildFunctionTable' ft (Complexity name cplxs)
             = case Map.lookup name ft of    
-                Just ct -> Map.insert name (zip (map fst ct) cplxs) ft
+                -- do not drop any args if function already been traversed
+                Just ct -> Map.insert name (zip (map fst ct) (cplxs ++ repeat None)) ft
                 Nothing -> Map.insert name (zip (repeat "?") cplxs) ft
         buildFunctionTable' ft (Func (FuncData name args _))
             = case Map.lookup name ft of    
+                -- drop any extra complexities if complexity already been traversed
                 Just ct -> Map.insert name (zip args (map snd ct)) ft
                 Nothing -> Map.insert name (zip args (repeat None)) ft
 
