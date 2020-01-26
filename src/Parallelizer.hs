@@ -39,7 +39,7 @@ splitFunction ft steps func @ (FuncData name args expr)
                     [Func func]
                 else 
                     [ Func $ FuncData name args (
-                        If (splitCondition significantArgs steps)
+                        If ((complexityCondition steps . head) significantArgs)
                            (callFunction (name ++ "_par"))
                            (callFunction (name ++ "_seq"))
                         )
@@ -52,20 +52,30 @@ splitFunction ft steps func @ (FuncData name args expr)
                 callFunction n = foldl (\app arg -> App app (Var arg)) (Var n) args
 
 
--- splitCondition takes the parsed complexity annotation of a function and
+complexityCondition :: Int -> (Name, Complexity) -> Expr
+complexityCondition _ (_, None)
+    = Lit (LBool False)
+complexityCondition steps (m, Exponential)
+    = Op GTE (Var m) (Lit (LInt minSteps))
+    where minSteps = (ceiling . logBase 2 . fromIntegral) steps
+complexityCondition steps (m, Polynomial n)
+    = Op GTE (Var m) (Lit (LInt minSteps))
+    where minSteps = ceiling (fromIntegral steps ** (1 / fromIntegral n))
+
+-- complexityCondition takes the parsed complexity annotation of a function and
 -- returns the expression corresponding to the condition whereby it should be
 -- executed in parallel.
-splitCondition :: ComplexityTable -> Int -> Expr
-splitCondition ct steps
-    = foldl (Op Or) e es 
-    where
-        (e : es) = map toCondition ct
-        toCondition :: (Name, Complexity) -> Expr
-        toCondition (m, None)
-            = Lit (LBool False)
-        toCondition (m, Exponential)
-            = Op GT (Var m) (Lit (LInt minM))
-            where minM = (ceiling . logBase 2 . fromIntegral) steps
-        toCondition (m, Polynomial n)
-            = Op GT (Var m) (Lit (LInt minM))
-            where minM = ceiling (fromIntegral steps ** (1 / fromIntegral n))
+-- complexityCondition :: ComplexityTable -> Int -> Expr
+-- complexityCondition ct steps
+--     = foldl (Op Or) e es 
+--     where
+--         (e : es) = map toCondition ct
+--         toCondition :: (Name, Complexity) -> Expr
+--         toCondition (m, None)
+--             = Lit (LBool False)
+--         toCondition (m, Exponential)
+--             = Op GTE (Var m) (Lit (LInt minM))
+--             where minM = (ceiling . logBase 2 . fromIntegral) steps
+--         toCondition (m, Polynomial n)
+--             = Op GTE (Var m) (Lit (LInt minM))
+--             where minM = ceiling (fromIntegral steps ** (1 / fromIntegral n))

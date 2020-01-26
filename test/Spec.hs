@@ -1,6 +1,6 @@
 import Simple.Parser (parseProg)
 import Simple.Syntax
-import Parallelizer (buildFunctionTable, splitFunction, splitCondition)
+import Parallelizer (buildFunctionTable, splitFunction, complexityCondition)
 
 import qualified Data.Map.Strict as Map
 
@@ -14,7 +14,7 @@ tests = testGroup "Tests"
             [ parserTests
             , buildFunctionTableTests
             , splitFunctionTests
-            , splitConditionTests
+            , complexityConditionTests
             ]
 
 
@@ -80,5 +80,15 @@ splitFunctionTests = testGroup "splitFunction tests"
     []
 
 
-splitConditionTests = testGroup "splitCondition tests"
-    []
+complexityConditionTests = testGroup "complexityCondition tests"
+    [ testCase "false condition for none" $
+        complexityCondition 100 ("b", None) @?= Lit (LBool False)    
+    , testCase "creates condition for exponential time" $
+        complexityCondition 100 ("b", Exponential) @?= Op GTE (Var "b") (Lit (LInt 7))
+    , testCase "creates condition for linear time" $
+        complexityCondition 100 ("b", Polynomial 1) @?= Op GTE (Var "b") (Lit (LInt 100))
+    , testCase "creates condition for quadratic time" $
+        complexityCondition 100 ("b", Polynomial 2) @?= Op GTE (Var "b") (Lit (LInt 10))
+    , testCase "creates condition for cubic time" $
+        complexityCondition 100 ("b", Polynomial 3) @?= Op GTE (Var "b") (Lit (LInt 5))
+    ]
