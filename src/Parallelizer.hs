@@ -11,6 +11,7 @@ type FunctionCplx = Expr
 type FunctionData = ([Name], FunctionDefn, FunctionCplx)
 type FunctionTable = Map.Map Name FunctionData
 
+
 buildFunctionTable :: Prog -> FunctionTable
 buildFunctionTable 
     = foldl buildFunctionTable' Map.empty
@@ -64,19 +65,6 @@ freeVariables Lit{}
 freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
 
-        -- buildFunctionTable' :: FunctionTable -> Decl -> FunctionTable
-        -- buildFunctionTable' ft (Complexity name cplxs)
-        --     = case Map.lookup name ft of    
-        --         -- do not drop any args if function already been traversed
-        --         Just ct -> Map.insert name (zip (map fst ct) (cplxs ++ repeat None)) ft
-        --         Nothing -> Map.insert name (zip (repeat "?") cplxs) ft
-        -- buildFunctionTable' ft (Func (FuncData name args _))
-        --     = case Map.lookup name ft of    
-        --         -- drop any extra complexities if complexity already been traversed
-        --         Just ct -> Map.insert name (zip args (map snd ct)) ft
-        --         Nothing -> Map.insert name (zip args (repeat None)) ft
-
-
 -- splitFunction takes a function, and splits it into multiple functions if
 -- it has a time complexity annotation.
 -- splitFunction :: FunctionTable -> Int -> FuncData -> [Decl]
@@ -101,35 +89,3 @@ freeVariables (Op _ e1 e2)
 --             where 
 --                 significantArgs = filter ((/= None) . snd) ct
 --                 callFunction n = foldl (\app arg -> App app (Var arg)) (Var n) args
-
--- TODO: parse complexity as Expr to consider multi-variables
--- e.g. 
--- # foobar (a ** 2) * (b ** 2)
--- foobar a b = ...
--- complexityCondition :: Int -> (Name, Complexity) -> Expr
--- complexityCondition _ (_, None)
---     = Lit (LBool False)
--- complexityCondition steps (m, Exponential)
---     = Op GTE (Var m) (Lit (LInt minSteps))
---     where minSteps = (ceiling . logBase 2 . fromIntegral) steps
--- complexityCondition steps (m, Polynomial n)
---     = Op GTE (Var m) (Lit (LInt minSteps))
---     where minSteps = ceiling (fromIntegral steps ** (1 / fromIntegral n))
-
--- complexityCondition takes the parsed complexity annotation of a function and
--- returns the expression corresponding to the condition whereby it should be
--- executed in parallel.
--- complexityCondition :: ComplexityTable -> Int -> Expr
--- complexityCondition ct steps
---     = foldl (Op Or) e es 
---     where
---         (e : es) = map toCondition ct
---         toCondition :: (Name, Complexity) -> Expr
---         toCondition (m, None)
---             = Lit (LBool False)
---         toCondition (m, Exponential)
---             = Op GTE (Var m) (Lit (LInt minM))
---             where minM = (ceiling . logBase 2 . fromIntegral) steps
---         toCondition (m, Polynomial n)
---             = Op GTE (Var m) (Lit (LInt minM))
---             where minM = ceiling (fromIntegral steps ** (1 / fromIntegral n))

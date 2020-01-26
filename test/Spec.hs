@@ -8,6 +8,8 @@ import qualified Data.Set as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
+basicFunctionDefn = Op Add (Lit (LInt 1)) (Lit (LInt 1))
+
 main = defaultMain tests
 
 tests :: TestTree
@@ -43,7 +45,36 @@ parserTests = testGroup "Parser tests"
     ]
 
 
-buildFunctionTableTests = testGroup "buildFunctionTable tests" []
+buildFunctionTableTests = testGroup "buildFunctionTable tests" 
+    [ testCase "creates entry for just function" $
+        buildFunctionTable [Func "bunglebionics" ["n"] basicFunctionDefn]
+            @?= Map.fromList [("bunglebionics", (["n"], basicFunctionDefn, Lit (LInt 1)))]
+    , -- TODO: may want to reconsider this behaviour
+      testCase "creates entry for just annotation" $
+        buildFunctionTable [Cplx "bunglebionics" (Var "n")]
+            @?= Map.fromList [("bunglebionics", ([], Lit (LInt 1), Var "n"))]
+    , testCase "updates function entry when annotation reached" $
+        buildFunctionTable [Func "bunglebionics" ["n"] basicFunctionDefn, Cplx "bunglebionics" (Var "n")]
+            @?= Map.fromList [("bunglebionics", (["n"], basicFunctionDefn, Var "n"))]
+    , testCase "updates annotation entry when function reached" $
+        buildFunctionTable [Cplx "bunglebionics" (Var "n"), Func "bunglebionics" ["n"] basicFunctionDefn]
+            @?= Map.fromList [("bunglebionics", (["n"], basicFunctionDefn, Var "n"))]
+    , testCase "keeps function entry when annotation does not match" $
+        buildFunctionTable [Func "bunglebionics" ["n"] basicFunctionDefn, Cplx "bunglebionics" (Var "c")]
+            @?= Map.fromList [("bunglebionics", (["n"], basicFunctionDefn, Lit (LInt 1)))]
+    , testCase "discards annotation entry when function does not match" $
+        buildFunctionTable [Cplx "bunglebionics" (Var "c"), Func "bunglebionics" ["n"] basicFunctionDefn]
+            @?= Map.fromList [("bunglebionics", (["n"], basicFunctionDefn, Lit (LInt 1)))]
+    , testCase "can construct from multiple functions" $
+        buildFunctionTable [ Cplx "bunglebionics" (Var "n")
+                           , Func "bunglebionics" ["n"] basicFunctionDefn
+                           , Func "bungletronics" ["n", "m", "o"] basicFunctionDefn
+                           , Cplx "bungletronics" (Op Mul (Var "n") (Var "m"))
+                           ]
+            @?= Map.fromList [ ("bunglebionics", (["n"], basicFunctionDefn, Var "n"))
+                             , ("bungletronics", (["n", "m", "o"], basicFunctionDefn, Op Mul (Var "n") (Var "m")))
+                             ]
+    ]
 
 isValidComplexityTests = testGroup "isValidComplexity tests" 
     [ testCase "validates constant time" $
