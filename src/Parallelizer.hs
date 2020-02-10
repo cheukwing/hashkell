@@ -117,30 +117,31 @@ addDependentToNode :: DTable -> DName -> DName -> DTable
 addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
 
-createDGraph :: Expr -> DTable
-createDGraph = snd . toDGraph (Map.fromList [("_", DBranch [])]) "_" 0
 
-toDGraph :: DTable -> DName -> Int -> Expr -> (Int, DTable)
-toDGraph dt base i (Lit lit)
+createDTable :: Expr -> DTable
+createDTable = snd . toDTable (Map.fromList [("_", DBranch [])]) "_" 0
+
+toDTable :: DTable -> DName -> Int -> Expr -> (Int, DTable)
+toDTable dt base i (Lit lit)
     = (i + 1, dt'')
     where 
         name = depName i
         node = DDep name (DLit lit) []
         dt'  = addDependentToNode dt base name
         dt'' = Map.insert name node dt'
-toDGraph dt base i (Var var)
+toDTable dt base i (Var var)
     = (i + 1, dt'')
     where
         name = depName i
         node = DDep name (DVar var) []
         dt'  = addDependentToNode dt var name
         dt'' = Map.insert name node dt'
-toDGraph dt base i (Op op e1 e2)
+toDTable dt base i (Op op e1 e2)
     = (i'' + 1, dt''''')
     where
         -- setup graphs for subexpressions
-        (i', dt')   = toDGraph dt base i e1
-        (i'', dt'') = toDGraph dt' base i' e2
+        (i', dt')   = toDTable dt base i e1
+        (i'', dt'') = toDTable dt' base i' e2
         nameLeft    = depName (i' - 1)
         nameRight   = depName (i'' - 1)
         name        = depName i''
@@ -150,13 +151,13 @@ toDGraph dt base i (Op op e1 e2)
         -- add self to table
         node        = DDep name (DOp op (DVar nameLeft) (DVar nameRight)) []
         dt'''''     = Map.insert name node dt''''
-toDGraph dt base i e @ App{}
+toDTable dt base i e @ App{}
     = (i'' + 1, dt'''')
     where
         -- assume full applications
         -- setup graphs for all args
         (appName, args) = appArgs e
-        (is, dts)       = unzip $ scanl (\(i', dt') a -> toDGraph dt' base i' a) (i, dt) args
+        (is, dts)       = unzip $ scanl (\(i', dt') a -> toDTable dt' base i' a) (i, dt) args
         depNames        = map (depName . flip (-) 1) is
         i''             = last is
         dt''            = last dts
@@ -172,13 +173,13 @@ toDGraph dt base i e @ App{}
         appArgs (App e1 e2)
           = (name, e2 : es)
           where (name, es) = appArgs e1
-toDGraph dt base i (Let defs e)
+toDTable dt base i (Let defs e)
     = (i'' + 1, dt''''')
     where
         -- setup graphs for all defs
         (i', dt')  = foldl defToDGraph (i, dt) defs
         -- setup graph for expression
-        (i'', dt'') = toDGraph dt' base i' e
+        (i'', dt'') = toDTable dt' base i' e
         expName     = depName (i'' - 1)
         name        = depName i'' 
         -- add self as dependent to all defs and expression
@@ -191,16 +192,16 @@ toDGraph dt base i (Let defs e)
         defToDGraph (i, dt) (Def name e)
             = (i', dt''')
             where
-                (i', dt') = toDGraph dt base i e
+                (i', dt') = toDTable dt base i e
                 nameSub   = depName (i' - 1)
                 dt''      = addDependentToNode dt' nameSub name
                 node      = DDep name (DVar nameSub) []
                 dt'''     = Map.insert name node dt''
-toDGraph dt base i (If e1 e2 e3)
+toDTable dt base i (If e1 e2 e3)
     = (i''' + 1, dt'''''')
     where
         -- setup graph for condition
-        (i', dt')      = toDGraph dt base i e1
+        (i', dt')      = toDTable dt base i e1
         condName       = depName (i' - 1)
         -- setup branch nodes
         thenBranch     = DBranch []
@@ -209,8 +210,8 @@ toDGraph dt base i (If e1 e2 e3)
         elseName       = "_" ++ show (i' + 1)
         dt''           = Map.insert elseName elseBranch (Map.insert thenName thenBranch dt')
         -- set then and else expressions to branch off from branch nodes
-        (i'', dt''')   = toDGraph dt'' thenName (i' + 2) e2
-        (i''', dt'''') = toDGraph dt''' elseName i'' e3
+        (i'', dt''')   = toDTable dt'' thenName (i' + 2) e2
+        (i''', dt'''') = toDTable dt''' elseName i'' e3
         name           = depName i'''
         -- add self as dependent to condition
         dt'''''        = addDependentToNode dt'''' condName name
