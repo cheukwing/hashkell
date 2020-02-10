@@ -91,12 +91,14 @@ data DNode
     | DArg [DName]
     | DIf DName [DName] DName DName
     | DDep DName DExpr [DName]
+    deriving (Eq, Show)
 
 data DExpr
     = DApp Name [DExpr]
     | DOp BinOp DExpr DExpr
     | DVar Name
     | DLit Lit
+    deriving (Eq, Show)
 
 depName :: Int -> String
 depName n = "_x" ++ show n
@@ -114,6 +116,9 @@ addDependent (DDep name exp deps) dep
 addDependentToNode :: DTable -> DName -> DName -> DTable
 addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
+
+createDGraph :: Expr -> DTable
+createDGraph = snd . toDGraph (Map.fromList [("_", DBranch [])]) "_" 0
 
 toDGraph :: DTable -> DName -> Int -> Expr -> (Int, DTable)
 toDGraph dt base i (Lit lit)
