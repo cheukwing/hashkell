@@ -7,6 +7,7 @@ import Simple.Syntax
 import Prelude hiding (EQ, GT, LT)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Control.Monad.State.Strict
 
 type FunctionDefn = Expr
 type FunctionCplx = Expr
@@ -92,7 +93,7 @@ data DNode
     = DBranch [DName]
     | DArg [DName]
     | DIf DName [DName] DName DName
-    | DDep DName DExpr [DName]
+    | DDep DExpr [DName]
     deriving (Eq, Show)
 
 data DExpr
@@ -112,12 +113,13 @@ addDependent (DArg deps) dep
     = DArg (dep : deps)
 addDependent (DIf name deps thenBranch elseBranch) dep
     = DIf name (dep : deps) thenBranch elseBranch
-addDependent (DDep name exp deps) dep
-    = DDep name exp (dep : deps)
+addDependent (DDep exp deps) dep
+    = DDep exp (dep : deps)
         
 addDependentToNode :: DTable -> DName -> DName -> DTable
 addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
+
 
 
 createDTable :: FunctionData -> DTable
@@ -126,6 +128,60 @@ createDTable (args, defn, _)
     where
         initTable = ("_", DBranch []) : argsEntries
         argsEntries = map (, DArg []) args
+
+
+type TableState = (DTable, DName, Int)
+
+addDependentToTable :: DName -> State TableState ()
+addDependentToTable parent = do
+    (dt, base, i) <- get
+    put (Map.insert parent (addDependent ((Map.!) dt parent) (depName i)), base, i)
+
+addNodeToTable :: DNode -> State TableState ()
+addNodeToTable node = do
+    (dt, base, i) <- get
+    put (Map.insert (depName i) node dt, base, i)
+
+incrementNameCounter :: State TableState Int
+incrementNameCounter = do
+    (dt, base, i) <- get
+    put (dt, base, i + 1)
+    return (depName i)
+
+_toDTable :: Expr -> State (DTable, DName, Int) DName
+_toDTable (Lit lit) = do
+    (_, base, _) <- get
+    addDependentToTable base
+    addNodeToTable (DDep (DLit lit) [])
+    incrementNameCounter
+_toDTable (Var var) = do
+    addDependentToTable var
+    addNodeToTable (DDep (DVar var) [])
+    incrementNameCounter
+_toDTable (Op op e1 e2) = do
+    left <- _toDTable e1
+    right <- _toDTable e2
+    addDependentToTable left
+    addDependentToTable right
+    addNodeToTable (DDep (DOp op (DVar left) (DVar right)) [])
+    incrementNameCounter
+_toDTable e @ App{} = do
+    let
+        (appName, args) = appArgs e
+        appArgs :: Expr -> (Name, [Expr])  
+        appArgs (App (Var name) e)
+          = (name, [e])
+        appArgs (App e1 e2)
+          = (name, e2 : es)
+          where (name, es) = appArgs e1
+    depNames <- mapM _toDTable args
+    mapM_ addDependentToTable depNames
+    addNodeToTable (DDep (DApp appName (map DVar depNames)) [])
+    incrementNameCounter
+_toDTable (Let defs e) = do
+    let
+        fdsaf
+    mapM_ addDependentToTable 
 
 
 -- TODO: state monad
