@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Parallelizer where
 
 import Simple.Syntax
@@ -118,9 +120,16 @@ addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
 
 
-createDTable :: Expr -> DTable
-createDTable = snd . toDTable (Map.fromList [("_", DBranch [])]) "_" 0
+createDTable :: FunctionData -> DTable
+createDTable (args, defn, _)
+    = snd $ toDTable (Map.fromList initTable) "_" 0 defn
+    where
+        initTable = ("_", DBranch []) : argsEntries
+        argsEntries = map (, DArg []) args
 
+
+-- TODO: state monad
+-- <- get
 toDTable :: DTable -> DName -> Int -> Expr -> (Int, DTable)
 toDTable dt base i (Lit lit)
     = (i + 1, dt'')
