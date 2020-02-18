@@ -92,7 +92,7 @@ splitFunctions
 data DNode
     = DBranch [DName]
     | DArg [DName]
-    | DIf DName [DName] DName DName
+    | DIf [DName] DName DName
     | DDep DExpr [DName]
     deriving (Eq, Show)
 
@@ -111,8 +111,8 @@ addDependent (DBranch deps) dep
     = DBranch (dep : deps)
 addDependent (DArg deps) dep
     = DArg (dep : deps)
-addDependent (DIf name deps thenBranch elseBranch) dep
-    = DIf name (dep : deps) thenBranch elseBranch
+addDependent (DIf deps thenBranch elseBranch) dep
+    = DIf (dep : deps) thenBranch elseBranch
 addDependent (DDep exp deps) dep
     = DDep exp (dep : deps)
         
@@ -121,13 +121,14 @@ addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
 
 
-
+{-
 createDTable :: FunctionData -> DTable
 createDTable (args, defn, _)
     = snd $ toDTable (Map.fromList initTable) "_" 0 defn
     where
         initTable = ("_", DBranch []) : argsEntries
         argsEntries = map (, DArg []) args
+-}
 
 
 type TableState = (DTable, DName, Int)
@@ -135,20 +136,43 @@ type TableState = (DTable, DName, Int)
 addDependentToTable :: DName -> State TableState ()
 addDependentToTable parent = do
     (dt, base, i) <- get
-    put (Map.insert parent (addDependent ((Map.!) dt parent) (depName i)), base, i)
+    put (Map.insert parent (addDependent ((Map.!) dt parent) (depName i)) dt, base, i)
+
+addDependentToTableWithName :: DName -> DName -> State TableState ()
+addDependentToTableWithName parent child = do
+    (dt, base, i) <- get
+    put (Map.insert parent (addDependent ((Map.!) dt parent) child) dt, base, i)
 
 addNodeToTable :: DNode -> State TableState ()
 addNodeToTable node = do
     (dt, base, i) <- get
     put (Map.insert (depName i) node dt, base, i)
 
-incrementNameCounter :: State TableState Int
+addNodeToTableWithName :: DNode -> DName -> State TableState ()
+addNodeToTableWithName node name = do
+    (dt, base, i) <- get
+    put (Map.insert name node dt, base, i)
+
+addBranchToTable :: State TableState DName
+addBranchToTable = do
+    (dt, base, i) <- get
+    let bName = "_" ++ show i
+    put (Map.insert bName (DBranch []) dt, base, i + 1)
+    return bName
+
+setBase :: DName -> State TableState DName
+setBase base = do
+    (dt, oldBase, i) <- get
+    put (dt, base, i)
+    return oldBase
+
+incrementNameCounter :: State TableState DName
 incrementNameCounter = do
     (dt, base, i) <- get
     put (dt, base, i + 1)
     return (depName i)
 
-_toDTable :: Expr -> State (DTable, DName, Int) DName
+_toDTable :: Expr -> State TableState DName
 _toDTable (Lit lit) = do
     (_, base, _) <- get
     addDependentToTable base
@@ -180,110 +204,30 @@ _toDTable e @ App{} = do
     incrementNameCounter
 _toDTable (Let defs e) = do
     let
-        fdsaf
-    mapM_ addDependentToTable 
-
-
--- TODO: state monad
--- <- get
-toDTable :: DTable -> DName -> Int -> Expr -> (Int, DTable)
-toDTable dt base i (Lit lit)
-    = (i + 1, dt'')
-    where 
-        name = depName i
-        node = DDep name (DLit lit) []
-        dt'  = addDependentToNode dt base name
-        dt'' = Map.insert name node dt'
-toDTable dt base i (Var var)
-    = (i + 1, dt'')
-    where
-        name = depName i
-        node = DDep name (DVar var) []
-        dt'  = addDependentToNode dt var name
-        dt'' = Map.insert name node dt'
-toDTable dt base i (Op op e1 e2)
-    = (i'' + 1, dt''''')
-    where
-        -- setup graphs for subexpressions
-        (i', dt')   = toDTable dt base i e1
-        (i'', dt'') = toDTable dt' base i' e2
-        nameLeft    = depName (i' - 1)
-        nameRight   = depName (i'' - 1)
-        name        = depName i''
-        -- add self as dependent
-        dt'''       = addDependentToNode dt'' nameLeft name
-        dt''''      = addDependentToNode dt''' nameRight name
-        -- add self to table
-        node        = DDep name (DOp op (DVar nameLeft) (DVar nameRight)) []
-        dt'''''     = Map.insert name node dt''''
-toDTable dt base i e @ App{}
-    = (i'' + 1, dt'''')
-    where
-        -- assume full applications
-        -- setup graphs for all args
-        (appName, args) = appArgs e
-        (is, dts)       = unzip $ scanl (\(i', dt') a -> toDTable dt' base i' a) (i, dt) args
-        depNames        = map (depName . flip (-) 1) is
-        i''             = last is
-        dt''            = last dts
-        name            = depName i''
-        -- add self as dependent to all args
-        dt'''           = foldl (\dt' dn -> addDependentToNode dt' dn name) dt'' depNames
-        -- add self to table
-        node            = DDep name (DApp appName (map DVar depNames)) []
-        dt''''          = Map.insert name node dt'''
-        appArgs :: Expr -> (Name, [Expr])  
-        appArgs (App (Var name) e)
-          = (name, [e])
-        appArgs (App e1 e2)
-          = (name, e2 : es)
-          where (name, es) = appArgs e1
-toDTable dt base i (Let defs e)
-    = (i'' + 1, dt''''')
-    where
-        -- setup graphs for all defs
-        (i', dt')  = foldl defToDGraph (i, dt) defs
-        -- setup graph for expression
-        (i'', dt'') = toDTable dt' base i' e
-        expName     = depName (i'' - 1)
-        name        = depName i'' 
-        -- add self as dependent to all defs and expression
-        dt'''       = foldl (\dtable (Def defName _) -> addDependentToNode dtable defName name) dt'' defs
-        dt''''      = addDependentToNode dt''' expName name
-        -- add self to table
-        node        = DDep name (DVar expName) []
-        dt'''''     = Map.insert name node dt''''
-        defToDGraph :: (Int, DTable) -> Def -> (Int, DTable)
-        defToDGraph (i, dt) (Def name e)
-            = (i', dt''')
-            where
-                (i', dt') = toDTable dt base i e
-                nameSub   = depName (i' - 1)
-                dt''      = addDependentToNode dt' nameSub name
-                node      = DDep name (DVar nameSub) []
-                dt'''     = Map.insert name node dt''
-toDTable dt base i (If e1 e2 e3)
-    = (i''' + 1, dt'''''')
-    where
-        -- setup graph for condition
-        (i', dt')      = toDTable dt base i e1
-        condName       = depName (i' - 1)
-        -- setup branch nodes
-        thenBranch     = DBranch []
-        thenName       = "_" ++ show i'
-        elseBranch     = DBranch []
-        elseName       = "_" ++ show (i' + 1)
-        dt''           = Map.insert elseName elseBranch (Map.insert thenName thenBranch dt')
-        -- set then and else expressions to branch off from branch nodes
-        (i'', dt''')   = toDTable dt'' thenName (i' + 2) e2
-        (i''', dt'''') = toDTable dt''' elseName i'' e3
-        name           = depName i'''
-        -- add self as dependent to condition
-        dt'''''        = addDependentToNode dt'''' condName name
-        -- set then and else branches as dependents
-        node           = DIf name [] thenName elseName
-        -- add self to to table
-        dt''''''       = Map.insert name node dt'''''
+        defToTable :: Def -> State TableState DName
+        defToTable (Def defName exp) = do
+            expName <- _toDTable exp
+            addDependentToTableWithName expName defName
+            addNodeToTableWithName (DDep (DVar expName) []) defName
+            return defName
+    defNames <- mapM defToTable defs
+    expName <- _toDTable e
+    mapM_ addDependentToTable defNames
+    addDependentToTable expName
+    addNodeToTable (DDep (DVar expName) [])
+    incrementNameCounter
+_toDTable (If e1 e2 e3) = do
+    cond <- _toDTable e1
+    thenBranch <- addBranchToTable
+    base <- setBase thenBranch
+    thenExp <- _toDTable e2
+    elseBranch <- addBranchToTable
+    _ <- setBase elseBranch
+    elseExp <- _toDTable e3
+    _ <- setBase base
+    addDependentToTable cond
+    addNodeToTable (DIf [] thenBranch elseBranch)
+    incrementNameCounter
 
 
 {-
