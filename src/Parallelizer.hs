@@ -104,7 +104,10 @@ data DExpr
     deriving (Eq, Show)
 
 depName :: Int -> String
-depName n = "_x" ++ show n
+depName = (++) "_x" . show
+
+branchName :: Int -> String
+branchName =  (++) "_" . show
 
 addDependent :: DNode -> DName -> DNode
 addDependent (DBranch deps) dep
@@ -121,14 +124,14 @@ addDependentToNode dt name dep
     = Map.insert name (addDependent ((Map.!) dt name) dep) dt
 
 
-{-
 createDTable :: FunctionData -> DTable
 createDTable (args, defn, _)
-    = snd $ toDTable (Map.fromList initTable) "_" 0 defn
+    = table
     where
+        (table, _, _) = execState (toDTable defn) initState
+        initState = (Map.fromList initTable, "_", 0)
         initTable = ("_", DBranch []) : argsEntries
         argsEntries = map (, DArg []) args
--}
 
 
 type TableState = (DTable, DName, Int)
@@ -156,9 +159,8 @@ addNodeToTableWithName node name = do
 addBranchToTable :: State TableState DName
 addBranchToTable = do
     (dt, base, i) <- get
-    let bName = "_" ++ show i
-    put (Map.insert bName (DBranch []) dt, base, i + 1)
-    return bName
+    put (Map.insert (branchName i) (DBranch []) dt, base, i + 1)
+    return (branchName i)
 
 setBase :: DName -> State TableState DName
 setBase base = do
@@ -172,24 +174,24 @@ incrementNameCounter = do
     put (dt, base, i + 1)
     return (depName i)
 
-_toDTable :: Expr -> State TableState DName
-_toDTable (Lit lit) = do
+toDTable :: Expr -> State TableState DName
+toDTable (Lit lit) = do
     (_, base, _) <- get
     addDependentToTable base
     addNodeToTable (DDep (DLit lit) [])
     incrementNameCounter
-_toDTable (Var var) = do
+toDTable (Var var) = do
     addDependentToTable var
     addNodeToTable (DDep (DVar var) [])
     incrementNameCounter
-_toDTable (Op op e1 e2) = do
-    left <- _toDTable e1
-    right <- _toDTable e2
+toDTable (Op op e1 e2) = do
+    left <- toDTable e1
+    right <- toDTable e2
     addDependentToTable left
     addDependentToTable right
     addNodeToTable (DDep (DOp op (DVar left) (DVar right)) [])
     incrementNameCounter
-_toDTable e @ App{} = do
+toDTable e @ App{} = do
     let
         (appName, args) = appArgs e
         appArgs :: Expr -> (Name, [Expr])  
@@ -198,32 +200,32 @@ _toDTable e @ App{} = do
         appArgs (App e1 e2)
           = (name, e2 : es)
           where (name, es) = appArgs e1
-    depNames <- mapM _toDTable args
+    depNames <- mapM toDTable args
     mapM_ addDependentToTable depNames
     addNodeToTable (DDep (DApp appName (map DVar depNames)) [])
     incrementNameCounter
-_toDTable (Let defs e) = do
+toDTable (Let defs e) = do
     let
         defToTable :: Def -> State TableState DName
         defToTable (Def defName exp) = do
-            expName <- _toDTable exp
+            expName <- toDTable exp
             addDependentToTableWithName expName defName
             addNodeToTableWithName (DDep (DVar expName) []) defName
             return defName
     defNames <- mapM defToTable defs
-    expName <- _toDTable e
+    expName <- toDTable e
     mapM_ addDependentToTable defNames
     addDependentToTable expName
     addNodeToTable (DDep (DVar expName) [])
     incrementNameCounter
-_toDTable (If e1 e2 e3) = do
-    cond <- _toDTable e1
+toDTable (If e1 e2 e3) = do
+    cond <- toDTable e1
     thenBranch <- addBranchToTable
     base <- setBase thenBranch
-    thenExp <- _toDTable e2
+    thenExp <- toDTable e2
     elseBranch <- addBranchToTable
     _ <- setBase elseBranch
-    elseExp <- _toDTable e3
+    elseExp <- toDTable e3
     _ <- setBase base
     addDependentToTable cond
     addNodeToTable (DIf [] thenBranch elseBranch)
