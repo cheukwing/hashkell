@@ -1,6 +1,6 @@
-{-# LANGUAGE TupleSections #-}
-
-module Dependency where
+module Dependency (
+    toTable
+) where
 
 import Simple.Syntax
 import Parallelizer
@@ -173,22 +173,24 @@ incrementCounter = do
 
 buildTable :: Expr -> State FunctionState (Either DExpr DName)
 buildTable (Lit lit) =
+    -- literals are atomic
     return (Left (DLit lit))
 buildTable (Var var) =
+    -- assume: var is already defined
     return (Right var)
 buildTable (Op op e1 e2) = do
     xn1 <- buildTable e1
     xn2 <- buildTable e2
     case (xn1, xn2) of
+        -- if both arguments atomic, return as atomic
         (Left x1, Left x2) ->
             return $ Left (DOp op x1 x2)
+        -- otherwise, setup dependencies for expression
         _                  -> do
-            let addAsDependentIfName =
-                    Either.either
-                        return
-                        (\n -> do
-                            addAsDependentOf n
-                            return (DVar n))
+            -- one of the arguments may be atomic, if so,
+            -- do not bother adding as dependent
+            let addAsDependentIfName = Either.either return
+                        (\n -> addAsDependentOf n >> return (DVar n))
             v1 <- addAsDependentIfName xn1
             v2 <- addAsDependentIfName xn2
             addNode (Dep (DOp op v1 v2) [])
@@ -196,6 +198,8 @@ buildTable (Op op e1 e2) = do
 buildTable e @ App{} = do
     let
         (appName, args) = appArgs e
+        -- assume: all function applications are full
+        -- extract the function name and the arguments
         appArgs :: Expr -> (Name, [Expr])  
         appArgs (App (Var name) e)
           = (name, [e])
@@ -204,18 +208,24 @@ buildTable e @ App{} = do
           where (name, es) = appArgs e1
     ds <- mapM buildTable args
     if all Either.isLeft ds then do
+        -- if all arguments are atomic, then only need to add as dependent 
+        -- to the scope, so we are not lost
         addAsDependentOfScope
         addNode (Dep (DApp appName (Either.lefts ds)) [])
         Right <$> incrementCounter
     else do
+        -- otherwise, will need to set self as dependent to non-atomics
         addNode (Dep (DApp appName (map (Either.either id DVar) ds)) [])
         mapM_ addAsDependentOf (Either.rights ds)
         Right <$> incrementCounter
 buildTable (Let defs e) = do
     let
+        -- assume: definition names are globally unique throughout all paths
         defToTable :: Def -> State FunctionState ()
         defToTable (Def defName exp) = do
             xn <- buildTable exp
+            -- if definition is atomic, then set as dependent to scope
+            -- otherwise set dependencies as normal
             let addAsDependentIfName = Either.either 
                     (\x -> addAsDependentOfScopeWithName defName >> return x)
                     (\n -> addAsDependentOfWithName n defName >> return (DVar n))
@@ -223,6 +233,8 @@ buildTable (Let defs e) = do
             addNodeWithName (Dep v []) defName
     mapM_ defToTable defs
     xn <- buildTable e
+    -- if expression is atomic, return as atomic
+    -- otherwise, add setup dependencies as normal
     Either.either
         (return . Left)
         (\n -> do
@@ -232,17 +244,26 @@ buildTable (Let defs e) = do
         xn
 buildTable (If e1 e2 e3) = do
     let 
+        -- setup dependent of branches to the scope, to prevent unnecessary execution
         setScopeAsParent = Either.either handleExpr addAsDependentOfScopeWithName
-        handleExpr e = addAsDependentOfScope >> addNode (Dep e []) >> incrementCounter >> return ()
+        handleExpr e = do
+            addAsDependentOfScope
+            addNode (Dep e [])
+            incrementCounter
+            return ()
+    -- setup condition
     cxn <- buildTable e1
+    -- setup then branch
     thenScope <- addScope
     s <- setScope thenScope
     txn <- buildTable e2
     setScopeAsParent txn
+    -- setup else branch
     elseScope <- addScope
     setScope elseScope
     exn <- buildTable e3
     setScopeAsParent exn
+    -- restore scope, setup condition dependencies
     setScope s
     Either.either
         (\x -> do 
