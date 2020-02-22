@@ -24,6 +24,7 @@ data Node
     = Scope [DName]
     | Dep DExpr [DName]
     | Cond DExpr DName DName [DName]
+    deriving (Eq, Show)
 
 data DExpr
     = DApp Name [DExpr]
@@ -32,16 +33,21 @@ data DExpr
     | DLit Lit
     deriving (Eq, Show)
 
-{-
-createPTable :: FunctionData -> PTable
-createPTable (args, defn, _)
-    = table
+toTable :: FunctionData -> Table
+toTable (args, defn, _)
+    = case xn of
+        Left x -> Map.insert "_" (Dep x []) t
+        _      -> t
     where
-        (table, _, _) = execState (toPTable defn) initState
-        initState = (Map.fromList initTable, "_", 0)
-        initTable = ("_", PBranch []) : argsEntries
-        argsEntries = map (, PArg []) args
--}
+        (xn, fs)  = runState (buildTable defn) initState
+        t         = table fs
+        initState = FunctionState 
+            { table   = Map.fromList [("_", Scope [])]
+            , args    = args
+            , counter = 0
+            , scope   = "_"
+            }
+
 
 depName :: Int -> String
 depName = (++) "_x" . show
@@ -71,40 +77,39 @@ addDependent node name
 addAsDependentOf :: DName -> State FunctionState ()
 addAsDependentOf parent = do
     state <- get
-    let
-        t = table state
-        c = counter state
+    let t  = table state
+        c  = counter state
         as = args state
     if parent `elem` as then 
         put (state {table = Map.insert "_" (addDependent ((Map.!) t "_") (depName c)) t})
     else 
         put (state {table = Map.insert parent (addDependent ((Map.!) t parent) (depName c)) t })
 
+
 addAsDependentOfWithName :: DName -> DName -> State FunctionState ()
 addAsDependentOfWithName parent child = do
     state <- get
-    let
-        t = table state
+    let t  = table state
         as = args state
     if parent `elem` as then 
         put (state {table = Map.insert "_" (addDependent ((Map.!) t "_") child) t})
     else 
         put (state {table = Map.insert parent (addDependent ((Map.!) t parent) child) t })
 
+
 addAsDependentOfScope :: State FunctionState ()
 addAsDependentOfScope = do
     state <- get
-    let
-        t = table state
+    let t = table state
         c = counter state
         s = scope state
     put (state {table = Map.insert s (addDependent ((Map.!) t s) (depName c)) t})
 
+
 addAsDependentOfScopeWithName :: DName -> State FunctionState ()
 addAsDependentOfScopeWithName child = do
     state <- get
-    let
-        t = table state
+    let t = table state
         s = scope state
     put (state {table = Map.insert s (addDependent ((Map.!) t s) child) t})
 
@@ -112,10 +117,10 @@ addAsDependentOfScopeWithName child = do
 addNode :: Node -> State FunctionState ()
 addNode node = do
     state <- get
-    let
-        t = table state
+    let t = table state
         c = counter state
     put (state {table = Map.insert (depName c) node t})
+
 
 addNodeWithName :: Node -> DName -> State FunctionState ()
 addNodeWithName node name = do
@@ -154,13 +159,12 @@ buildTable (Op op e1 e2) = do
         (Left x1, Left x2) ->
             return $ Left (DOp op x1 x2)
         _                  -> do
-            let addAsDependentIfName xn =
-                    case xn of
-                        Left x -> 
-                            return x
-                        Right n -> do
+            let addAsDependentIfName =
+                    Either.either
+                        return
+                        (\n -> do
                             addAsDependentOf n
-                            return (DVar n)
+                            return (DVar n))
             v1 <- addAsDependentIfName xn1
             v2 <- addAsDependentIfName xn2
             addNode (Dep (DOp op v1 v2) [])
@@ -188,37 +192,24 @@ buildTable (Let defs e) = do
         defToTable :: Def -> State FunctionState ()
         defToTable (Def defName exp) = do
             xn <- buildTable exp
-            let
-                addAsDependentIfName :: Either DExpr DName -> State FunctionState DExpr 
-                addAsDependentIfName xn =
-                    case xn of
-                        Left x -> do
-                            addAsDependentOfScopeWithName defName
-                            return x
-                        Right n -> do
-                            addAsDependentOfWithName n defName
-                            return (DVar n)
+            let addAsDependentIfName = Either.either 
+                    (\x -> addAsDependentOfScopeWithName defName >> return x)
+                    (\n -> addAsDependentOfWithName n defName >> return (DVar n))
             v <- addAsDependentIfName xn
             addNodeWithName (Dep v []) defName
     mapM_ defToTable defs
     xn <- buildTable e
-    case xn of
-        Left x ->
-            return (Left x)
-        Right n -> do
+    Either.either
+        (return . Left)
+        (\n -> do
             addAsDependentOf n
             addNode (Dep (DVar n) [])
-            Right <$> incrementCounter
+            Right <$> incrementCounter)
+        xn
 buildTable (If e1 e2 e3) = do
-    let
-        setScopeAsParent :: Either DExpr DName -> State FunctionState ()
-        setScopeAsParent
-            = Either.either handleExpr addAsDependentOfScopeWithName
-            where
-                handleExpr e = do
-                    addNode (Dep e [])
-                    incrementCounter
-                    return ()
+    let 
+        setScopeAsParent = Either.either handleExpr addAsDependentOfScopeWithName
+        handleExpr e = addAsDependentOfScope >> addNode (Dep e []) >> incrementCounter >> return ()
     cxn <- buildTable e1
     thenScope <- addScope
     s <- setScope thenScope
@@ -229,12 +220,13 @@ buildTable (If e1 e2 e3) = do
     exn <- buildTable e3
     setScopeAsParent exn
     setScope s
-    case cxn of
-        Left x -> do
+    Either.either
+        (\x -> do 
             addNode (Cond x thenScope elseScope [])
-            Right <$> incrementCounter
-        Right n -> do
-            addAsDependentOf n
-            addNode (Cond (DVar n) thenScope elseScope [])
-            Right <$> incrementCounter
+            Right <$> incrementCounter)
+        (\n -> do 
+            addAsDependentOf n 
+            addNode (Cond (DVar n) thenScope elseScope []) 
+            Right <$> incrementCounter)
+        cxn
 
