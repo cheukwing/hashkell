@@ -79,9 +79,10 @@ addAsDependentOf parent = do
     state <- get
     let t  = table state
         c  = counter state
+        s  = scope state
         as = args state
     if parent `elem` as then 
-        put (state {table = Map.insert "_" (addDependent ((Map.!) t "_") (depName c)) t})
+        put (state {table = Map.insert s (addDependent ((Map.!) t s) (depName c)) t})
     else 
         put (state {table = Map.insert parent (addDependent ((Map.!) t parent) (depName c)) t })
 
@@ -90,20 +91,40 @@ addAsDependentOfWithName :: DName -> DName -> State FunctionState ()
 addAsDependentOfWithName parent child = do
     state <- get
     let t  = table state
+        s  = scope state
         as = args state
     if parent `elem` as then 
-        put (state {table = Map.insert "_" (addDependent ((Map.!) t "_") child) t})
+        put (state {table = Map.insert s (addDependent ((Map.!) t s) child) t})
     else 
         put (state {table = Map.insert parent (addDependent ((Map.!) t parent) child) t })
+
+
+existsDependency :: DName -> DName -> Table -> Bool
+existsDependency from to table
+    = from == to || getNodeAndCheck from
+    where 
+        getNodeAndCheck = existsDependency' . (Map.!) table
+        existsDependency' :: Node -> Bool
+        existsDependency' (Scope ns)
+            = to `elem` ns || any getNodeAndCheck ns
+        existsDependency' (Dep _ ns)
+            = to `elem` ns || any getNodeAndCheck ns
+        existsDependency' (Cond _ n1 n2 ns)
+            = to `elem` ns || any getNodeAndCheck ns
+            || getNodeAndCheck n1
+            || getNodeAndCheck n2
 
 
 addAsDependentOfScope :: State FunctionState ()
 addAsDependentOfScope = do
     state <- get
     let t = table state
-        c = counter state
+        n = depName $ counter state
         s = scope state
-    put (state {table = Map.insert s (addDependent ((Map.!) t s) (depName c)) t})
+    if existsDependency s n t then
+        return ()
+    else
+        put (state {table = Map.insert s (addDependent ((Map.!) t s) n) t})
 
 
 addAsDependentOfScopeWithName :: DName -> State FunctionState ()
@@ -111,7 +132,10 @@ addAsDependentOfScopeWithName child = do
     state <- get
     let t = table state
         s = scope state
-    put (state {table = Map.insert s (addDependent ((Map.!) t s) child) t})
+    if existsDependency s child t then
+        return ()
+    else
+        put (state {table = Map.insert s (addDependent ((Map.!) t s) child) t})
 
 
 addNode :: Node -> State FunctionState ()
@@ -184,8 +208,8 @@ buildTable e @ App{} = do
         addNode (Dep (DApp appName (Either.lefts ds)) [])
         Right <$> incrementCounter
     else do
-        mapM_ addAsDependentOf (Either.rights ds)
         addNode (Dep (DApp appName (map (Either.either id DVar) ds)) [])
+        mapM_ addAsDependentOf (Either.rights ds)
         Right <$> incrementCounter
 buildTable (Let defs e) = do
     let
