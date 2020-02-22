@@ -9,13 +9,19 @@ import qualified Data.Map.Strict as Map
 import Control.Monad.State.Strict
 
 type DName = String
-type DTable = Map.Map DName DNode
+type PTable = Map.Map DName PNode
+type TableState = (PTable, DName, Int)
 
 data DNode
-    = DBranch [DName]
-    | DArg [DName]
-    | DIf DName DName [DName] 
-    | DDep DExpr [DName]
+    = DNone [DName]
+    | DBranch [DName] [DName] [DName]
+    | DDep DName [DNode]
+
+data PNode
+    = PBranch [DName]
+    | PArg [DName]
+    | PIf DExpr DName DName [DName] 
+    | PDep DExpr [DName]
     deriving (Eq, Show)
 
 data DExpr
@@ -25,7 +31,15 @@ data DExpr
     | DLit Lit
     deriving (Eq, Show)
 
-type TableState = (DTable, DName, Int)
+createPTable :: FunctionData -> PTable
+createPTable (args, defn, _)
+    = table
+    where
+        (table, _, _) = execState (toPTable defn) initState
+        initState = (Map.fromList initTable, "_", 0)
+        initTable = ("_", PBranch []) : argsEntries
+        argsEntries = map (, PArg []) args
+
 
 depName :: Int -> String
 depName = (++) "_x" . show
@@ -33,30 +47,15 @@ depName = (++) "_x" . show
 branchName :: Int -> String
 branchName =  (++) "_" . show
 
-addDependent :: DNode -> DName -> DNode
-addDependent (DBranch deps) dep
-    = DBranch (dep : deps)
-addDependent (DArg deps) dep
-    = DArg (dep : deps)
-addDependent (DIf thenBranch elseBranch deps) dep
-    = DIf thenBranch elseBranch (dep : deps)
-addDependent (DDep exp deps) dep
-    = DDep exp (dep : deps)
-
-        
-addDependentToNode :: DTable -> DName -> DName -> DTable
-addDependentToNode dt name dep
-    = Map.insert name (addDependent ((Map.!) dt name) dep) dt
-
-
-createDTable :: FunctionData -> DTable
-createDTable (args, defn, _)
-    = table
-    where
-        (table, _, _) = execState (toDTable defn) initState
-        initState = (Map.fromList initTable, "_", 0)
-        initTable = ("_", DBranch []) : argsEntries
-        argsEntries = map (, DArg []) args
+addDependent :: PNode -> DName -> PNode
+addDependent (PBranch deps) dep
+    = PBranch (dep : deps)
+addDependent (PArg deps) dep
+    = PArg (dep : deps)
+addDependent (PIf exp thenBranch elseBranch deps) dep
+    = PIf exp thenBranch elseBranch (dep : deps)
+addDependent (PDep exp deps) dep
+    = PDep exp (dep : deps)
 
 
 addDependentToTable :: DName -> State TableState ()
@@ -71,13 +70,13 @@ addDependentToTableWithName parent child = do
     put (Map.insert parent (addDependent ((Map.!) dt parent) child) dt, base, i)
 
 
-addNodeToTable :: DNode -> State TableState ()
+addNodeToTable :: PNode -> State TableState ()
 addNodeToTable node = do
     (dt, base, i) <- get
     put (Map.insert (depName i) node dt, base, i)
 
 
-addNodeToTableWithName :: DNode -> DName -> State TableState ()
+addNodeToTableWithName :: PNode -> DName -> State TableState ()
 addNodeToTableWithName node name = do
     (dt, base, i) <- get
     put (Map.insert name node dt, base, i)
@@ -86,7 +85,7 @@ addNodeToTableWithName node name = do
 addBranchToTable :: State TableState DName
 addBranchToTable = do
     (dt, base, i) <- get
-    put (Map.insert (branchName i) (DBranch []) dt, base, i + 1)
+    put (Map.insert (branchName i) (PBranch []) dt, base, i + 1)
     return (branchName i)
 
 
@@ -104,24 +103,23 @@ incrementNameCounter = do
     return (depName i)
 
 
-toDTable :: Expr -> State TableState DName
-toDTable (Lit lit) = do
+toPTable :: Expr -> State TableState DName
+toPTable (Lit lit) = do
     (_, base, _) <- get
     addDependentToTable base
-    addNodeToTable (DDep (DLit lit) [])
+    addNodeToTable (PDep (DLit lit) [])
     incrementNameCounter
-toDTable (Var var) = do
-    addDependentToTable var
-    addNodeToTable (DDep (DVar var) [])
-    incrementNameCounter
-toDTable (Op op e1 e2) = do
-    left <- toDTable e1
-    right <- toDTable e2
+-- TODO: fix scoping of vars
+toPTable (Var var) =
+    return var
+toPTable (Op op e1 e2) = do
+    left <- toPTable e1
+    right <- toPTable e2
     addDependentToTable left
     addDependentToTable right
-    addNodeToTable (DDep (DOp op (DVar left) (DVar right)) [])
+    addNodeToTable (PDep (DOp op (DVar left) (DVar right)) [])
     incrementNameCounter
-toDTable e @ App{} = do
+toPTable e @ App{} = do
     let
         (appName, args) = appArgs e
         appArgs :: Expr -> (Name, [Expr])  
@@ -130,33 +128,34 @@ toDTable e @ App{} = do
         appArgs (App e1 e2)
           = (name, e2 : es)
           where (name, es) = appArgs e1
-    depNames <- mapM toDTable args
+    depNames <- mapM toPTable args
     mapM_ addDependentToTable depNames
-    addNodeToTable (DDep (DApp appName (map DVar depNames)) [])
+    addNodeToTable (PDep (DApp appName (map DVar depNames)) [])
     incrementNameCounter
-toDTable (Let defs e) = do
+-- TODO: fix scoping of definitions
+toPTable (Let defs e) = do
     let
         defToTable :: Def -> State TableState DName
         defToTable (Def defName exp) = do
-            expName <- toDTable exp
+            expName <- toPTable exp
             addDependentToTableWithName expName defName
-            addNodeToTableWithName (DDep (DVar expName) []) defName
+            addNodeToTableWithName (PDep (DVar expName) []) defName
             return defName
     defNames <- mapM defToTable defs
-    expName <- toDTable e
+    expName <- toPTable e
     mapM_ addDependentToTable defNames
     addDependentToTable expName
-    addNodeToTable (DDep (DVar expName) [])
+    addNodeToTable (PDep (DVar expName) [])
     incrementNameCounter
-toDTable (If e1 e2 e3) = do
-    cond <- toDTable e1
+toPTable (If e1 e2 e3) = do
+    cond <- toPTable e1
     thenBranch <- addBranchToTable
     base <- setBase thenBranch
-    thenExp <- toDTable e2
+    thenExp <- toPTable e2
     elseBranch <- addBranchToTable
     _ <- setBase elseBranch
-    elseExp <- toDTable e3
+    elseExp <- toPTable e3
     _ <- setBase base
     addDependentToTable cond
-    addNodeToTable (DIf thenBranch elseBranch [])
+    addNodeToTable (PIf (DVar cond) thenBranch elseBranch [])
     incrementNameCounter
