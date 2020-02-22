@@ -1,8 +1,9 @@
 # simple-haskell
 
-Parser for a simple subset of Haskell, as part of final year project.
+Parser for a simple subset of Haskell with time complexity annotations.
 
 ```haskell
+fib ## 2^n;
 fib n =
     if n == 0
         then 1
