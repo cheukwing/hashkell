@@ -1,9 +1,9 @@
 module Dependency (
-    toTable
+    toDependencyTable,
+    DependencyTable
 ) where
 
 import Simple.Syntax
-import Parallelizer
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -12,9 +12,9 @@ import qualified Data.Either as Either
 import Control.Monad.State.Strict
 
 type DName = String
-type Table = Map DName Node
+type DependencyTable = Map DName Node
 data FunctionState = FunctionState
-    { table :: Table
+    { table :: DependencyTable
     , args :: [Name]
     , counter :: Int
     , scope :: DName
@@ -33,8 +33,8 @@ data DExpr
     | DLit Lit
     deriving (Eq, Show)
 
-toTable :: FunctionData -> Table
-toTable (args, defn, _)
+toDependencyTable :: [String] -> Expr -> DependencyTable
+toDependencyTable args defn
     = case xn of
         Left x -> Map.insert "_" (Dep x []) t
         _      -> t
@@ -99,7 +99,7 @@ addAsDependentOfWithName parent child = do
         put (state {table = Map.insert parent (addDependent ((Map.!) t parent) child) t })
 
 
-existsDependency :: DName -> DName -> Table -> Bool
+existsDependency :: DName -> DName -> DependencyTable -> Bool
 existsDependency from to table
     = from == to || getNodeAndCheck from
     where 
@@ -156,8 +156,7 @@ addNodeWithName node name = do
 addScope :: State FunctionState DName
 addScope = do
     state <- get
-    let
-        t = table state
+    let t = table state
         c = counter state
     put (state {table = Map.insert (scopeName c) (Scope []) t, counter = c + 1})
     return (scopeName c)

@@ -5,19 +5,26 @@ import Simple.Syntax
 import Prelude hiding (EQ, GT, LT)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Dependency (toDependencyTable, DependencyTable)
 
 type FunctionDefn = Expr
 type FunctionCplx = Expr
 -- TODO: consider using maybes for defn and cplx
-type FunctionData = ([Name], FunctionDefn, FunctionCplx)
+type InitFunctionData = ([Name], FunctionDefn, FunctionCplx)
+type InitFunctionTable = Map.Map Name InitFunctionData
+
 type FunctionTable = Map.Map Name FunctionData
+data FunctionData
+    = Sequential [Name] FunctionDefn
+    | Parallel [Name] DependencyTable
+    deriving (Show)
 
 
-buildFunctionTable :: Prog -> FunctionTable
-buildFunctionTable 
+buildInitFunctionTable :: Prog -> InitFunctionTable
+buildInitFunctionTable 
     = foldl buildFunctionTable' Map.empty
     where
-        buildFunctionTable' :: FunctionTable -> Decl -> FunctionTable
+        buildFunctionTable' :: InitFunctionTable -> Decl -> InitFunctionTable
         buildFunctionTable' ft (Func name args expr)
             | isMember && fvsValid  = Map.insert name (args, expr, cplx) ft
             | otherwise             = Map.insert name (args, expr, Lit (LInt 1)) ft
@@ -55,8 +62,7 @@ freeVariables (If e1 e2 e3)
     = Set.unions [freeVariables e1, freeVariables e2, freeVariables e3]
 freeVariables (Let defs e)
     = Set.difference (freeVariables e) bound
-    where
-        bound = Set.fromList $ map (\(Def name _) -> name) defs
+    where bound = Set.fromList $ map (\(Def name _) -> name) defs
 freeVariables (App e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
 freeVariables (Var n)
@@ -67,19 +73,25 @@ freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
 
 
-splitFunctions :: FunctionTable -> FunctionTable
+splitFunctions :: InitFunctionTable -> FunctionTable
 splitFunctions 
     = Map.foldlWithKey splitFunction Map.empty
     where
-        splitFunction :: FunctionTable -> Name -> FunctionData -> FunctionTable
-        splitFunction st name fd @ (_ , _, Lit{})
-            = Map.insert name fd st
+        splitFunction :: FunctionTable -> Name -> InitFunctionData -> FunctionTable
+        splitFunction st name fd @ (args, defn, Lit{})
+            = Map.insert name (Sequential args defn) st
         splitFunction st name (args, defn, cplx)
-            = st'
+            = Map.union split st
             where
-                st'            = Map.union (Map.fromList [(name, start), (name ++ "_seq", (args, defn, Lit (LInt 1)))]) st
+                split          = Map.fromList 
+                                    [ (name, Sequential args branchingCall)
+                                    , (seqName, Sequential args defn)
+                                    , (parName, Parallel args (toDependencyTable args defn))
+                                    ]
+                seqName        = name ++ "_seq"
+                parName        = name ++ "_par"
                 callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
-                start          = (args, If (Op LT cplx (Lit (LInt 100)))
+                branchingCall  = If (Op LT cplx (Lit (LInt 100)))
                                                 (callFunction $ name ++ "_seq")
                                                 (callFunction $ name ++ "_par")
-                                 , cplx)
+                                 
