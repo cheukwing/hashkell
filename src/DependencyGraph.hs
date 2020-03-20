@@ -5,8 +5,6 @@ module DependencyGraph (
 
 import Simple.Syntax
 
-import Data.Set.Strict (Set)
-
 import Control.Monad.State.Strict
 import Data.Either (Either(..), either)
 import qualified Data.Either as Either
@@ -19,13 +17,15 @@ type DName = String
 
 data DType
     = DepD
-    | DepIf
+    | DepThen
     | DepElse
+    deriving (Eq, Show)
 
 data DNode
     = Scope
     | Expression DExpr
     | Conditional DExpr
+    deriving (Eq, Show)
 
 data DExpr
     = DApp Name [DExpr]
@@ -40,13 +40,13 @@ type FunctionState = (DependencyGraph, [Name], Int, DName)
 depName :: State FunctionState DName
 depName = do
     (_, _, counter, _) <- get
-    return "_x" ++ show counter
+    return ("_x" ++ show counter)
 
 
 scopeName :: State FunctionState DName
 scopeName = do
     (_, _, counter, _) <- get
-    return "_" ++ show counter
+    return ("_" ++ show counter)
 
 
 setScope :: DName -> State FunctionState DName
@@ -56,12 +56,12 @@ setScope s = do
     return scope
 
 
-existsDependency :: Graph -> DName -> Bool
+existsDependency :: DependencyGraph -> DName -> Bool
 existsDependency (_, ds) name =
-    any (\(_, child) -> child == name) ds
+    any (\(_, child, _) -> child == name) ds
 
 
-addArc :: Graph -> DName -> DName -> Graph
+addArc :: DependencyGraph -> DName -> DName -> DependencyGraph
 addArc (ns, ds) parent child =
     (ns, (parent, child, DepD) : ds)
 
@@ -92,7 +92,7 @@ addConditionalDependency c t e = do
         , args, counter, scope)
 
 
-addNode :: Graph -> DName -> DNode -> Graph
+addNode :: DependencyGraph -> DName -> DNode -> DependencyGraph
 addNode (ns, ds) name node =
     ((name, node) : ns, ds)
 
@@ -115,7 +115,7 @@ incrementCounter :: State FunctionState DName
 incrementCounter = do
     (graph, args, counter, scope) <- get
     put (graph, args, counter + 1, scope)
-    return (depName counter)
+    depName
 
 
 toDependencyGraph :: [String] -> Expr -> DependencyGraph
@@ -188,7 +188,7 @@ buildGraph (Let defs e) = do
             let addDependencyIfName = either 
                     (\x -> addScopeDependency defName >> return x)
                     (\n -> addDependency n defName >> return (DVar n))
-            v <- addAsDependentIfName xn
+            v <- addDependencyIfName xn
             addDependencyNode defName (Expression v)
     mapM_ defToGraph defs
     xn <- buildGraph e
@@ -209,7 +209,7 @@ buildGraph (If e1 e2 e3) = do
         handleExpr e = do
             name <- depName
             addScopeDependency name
-            addNode name (Expression e)
+            addDependencyNode name (Expression e)
             incrementCounter
             return ()
 
@@ -218,7 +218,7 @@ buildGraph (If e1 e2 e3) = do
             oldScope <- setScope scope
             xn <- buildGraph e
             either handleExpr addScopeDependency xn
-            return (setScope oldScope)
+            setScope oldScope
 
     cxn <- buildGraph e1
     thenScope <- handleBranch e2
@@ -228,10 +228,10 @@ buildGraph (If e1 e2 e3) = do
     addConditionalDependency name thenScope elseScope
     either
         (\x -> do 
-            addDependencyNode name (Condition x)
+            addDependencyNode name (Conditional x)
             Right <$> incrementCounter)
         (\n -> do 
-            addAsDependentOf n name 
-            addDependencyNode (Condition (DVar n))
+            addDependency n name 
+            addDependencyNode name (Conditional (DVar n))
             Right <$> incrementCounter)
         cxn

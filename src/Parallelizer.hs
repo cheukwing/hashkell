@@ -5,7 +5,7 @@ import Simple.Syntax
 import Prelude hiding (EQ, GT, LT)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Dependency (toDependencyTable, DependencyTable)
+import DependencyGraph (toDependencyGraph, DependencyGraph)
 
 type FunctionDefn = Expr
 type FunctionCplx = Expr
@@ -16,8 +16,8 @@ type InitFunctionTable = Map.Map Name InitFunctionData
 type FunctionTable = Map.Map Name FunctionData
 data FunctionData
     = Sequential [Name] FunctionDefn
-    | Parallel [Name] DependencyTable
-    deriving (Show)
+    | Parallel [Name] DependencyGraph
+    deriving Show
 
 
 buildInitFunctionTable :: Prog -> InitFunctionTable
@@ -86,7 +86,7 @@ splitFunctions
                 split          = Map.fromList 
                                     [ (name, Sequential args branchingCall)
                                     , (seqName, Sequential args defn)
-                                    , (parName, Parallel args (toDependencyTable args defn))
+                                    , (parName, Parallel args (toDependencyGraph args defn))
                                     ]
                 seqName        = name ++ "_seq"
                 parName        = name ++ "_par"
