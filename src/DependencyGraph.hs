@@ -1,6 +1,7 @@
 module DependencyGraph (
     DependencyGraph,
     toDependencyGraph,
+    depGraphParams,
 ) where
 
 import Simple.Syntax
@@ -8,6 +9,10 @@ import Simple.Syntax
 import Control.Monad.State.Strict
 import Data.Either (Either(..), either)
 import qualified Data.Either as Either
+
+import qualified Data.GraphViz as G
+import qualified Data.GraphViz.Attributes.Complete as G
+import qualified Data.GraphViz.Types as G
 
 type DependencyGraph = ([DependencyNode], [Dependency])
 type DependencyNode = (DName, DNode)
@@ -107,15 +112,16 @@ addScope :: State FunctionState DName
 addScope = do
     (graph, args, counter, scope) <- get
     name <- scopeName
-    put (addNode graph name Scope, args, counter, scope)
+    put (addNode graph name Scope, args, counter + 1, scope)
     return name
 
 
 incrementCounter :: State FunctionState DName
 incrementCounter = do
     (graph, args, counter, scope) <- get
+    name <- depName
     put (graph, args, counter + 1, scope)
-    depName
+    return name
 
 
 toDependencyGraph :: [String] -> Expr -> DependencyGraph
@@ -235,3 +241,6 @@ buildGraph (If e1 e2 e3) = do
             addDependencyNode name (Conditional (DVar n))
             Right <$> incrementCounter)
         cxn
+
+depGraphParams :: G.GraphvizParams DName DNode DType () DNode
+depGraphParams = G.defaultParams
