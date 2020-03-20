@@ -37,7 +37,13 @@ data DExpr
     | DOp BinOp DExpr DExpr
     | DVar Name
     | DLit Lit
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show DExpr where
+    show (DLit lit) = show lit
+    show (DVar name) = name
+    show (DOp op e1 e2) = "(" ++ unwords [show e1, show op, show e2] ++ ")"
+    show (DApp n es) = "(" ++ unwords (n : map show es) ++ ")"
 
 type FunctionState = (DependencyGraph, [Name], Int, DName)
 
@@ -242,5 +248,15 @@ buildGraph (If e1 e2 e3) = do
             Right <$> incrementCounter)
         cxn
 
+-- Parameters for GraphViz
 depGraphParams :: G.GraphvizParams DName DNode DType () DNode
-depGraphParams = G.defaultParams
+depGraphParams = G.defaultParams {
+    G.fmtNode = \(name, node) -> case node of
+        Scope         -> [G.toLabel name]
+        Expression e  -> [G.toLabel $ name ++ " = " ++ show e]
+        Conditional e -> [G.toLabel $ name ++ " = If " ++ show e]
+    , G.fmtEdge = \(_, _, t) -> case t of
+        DepD -> []
+        DepThen -> [G.toLabel "then"]
+        DepElse -> [G.toLabel "else"]
+}

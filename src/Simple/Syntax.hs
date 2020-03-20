@@ -26,7 +26,25 @@ data Def
 data Lit
     = LInt Int
     | LBool Bool
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Ord)
+
+instance Show Lit where
+    show (LInt i)  = show i
+    show (LBool b) = show b
 
 data BinOp = Add | Sub | Mul | Div | Exp | EQ | LT | GT | LTE | GTE | And | Or
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Ord)
+
+instance Show BinOp where
+    show Add               = "+"
+    show Sub               = "-"
+    show Mul               = "*" 
+    show Div               = "/"
+    show Exp               = "^"
+    show Simple.Syntax.EQ  = "=="
+    show Simple.Syntax.LT  = "<"
+    show Simple.Syntax.GT  = ">"
+    show LTE               = "<="
+    show GTE               = ">="
+    show And               = "&&"
+    show Or                = "||"
