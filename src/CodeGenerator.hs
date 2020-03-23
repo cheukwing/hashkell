@@ -16,6 +16,6 @@ generateCode
         generateCode' (n, Parallel args g)
             = unwords (n : args) ++ " = "
 
-writeCode :: Prog -> IO ()
-writeCode =
-    writeFile "code.hs" . generateCode . toFunctionTable
+writeCode :: String -> Prog -> IO ()
+writeCode fileName =
+    writeFile fileName . generateCode . toFunctionTable

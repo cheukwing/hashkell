@@ -2,6 +2,7 @@ module DependencyGraph (
     DependencyGraph,
     toDependencyGraph,
     drawDependencyGraph,
+    graphToCode
 ) where
 
 import Simple.Syntax
@@ -11,6 +12,11 @@ import Data.Either (Either(..), either)
 import qualified Data.Either as Either
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.Maybe (Maybe)
+import qualified Data.Maybe as Maybe
+import Data.List (intercalate)
 
 -- For drawing graph
 import qualified Data.Text.Lazy as TL
@@ -20,6 +26,8 @@ import qualified Data.GraphViz.Attributes.Complete as G
 import qualified Data.GraphViz.Types as G
 
 
+-- DEBUG: remove me!
+import Debug.Trace
 
 type DependencyGraph = (NodeTable, [Dependency])
 type NodeTable = Map DName DNode
@@ -52,10 +60,14 @@ instance Show DExpr where
     show (DOp op e1 e2) = "(" ++ unwords [show e1, show op, show e2] ++ ")"
     show (DApp n es) = "(" ++ unwords (n : map show es) ++ ")"
 
-type FunctionState = (DependencyGraph, [Name], Int, DName)
 
 
 --- GRAPH BUILDING ---
+
+type Args = [Name]
+type Counter = Int
+type CurrentScope = DName
+type FunctionState = (DependencyGraph, Args, Counter, CurrentScope)
 
 depName :: State FunctionState DName
 depName = do
@@ -142,7 +154,8 @@ incrementCounter = do
 toDependencyGraph :: [String] -> Expr -> DependencyGraph
 toDependencyGraph args defn
     = case xn of
-        Left x -> (Map.fromList [("_", Expression x)], [])
+        --Left x -> (Map.fromList [("_", Expression x)], [])
+        Left x -> (Map.fromList [("_", Scope), ("_x0", Expression x)], [("_", "_x0", DepD)])
         _      -> graph
     where
         (xn, (graph, _, _, _))  = runState (buildGraph defn) initState
@@ -203,7 +216,7 @@ buildGraph (Let defs e) = do
         -- assume: definition names are globally unique throughout all paths
         defToGraph :: Def -> State FunctionState ()
         defToGraph (Def defName exp) = do
-            xn <- buildGraph  exp
+            xn <- buildGraph exp
             -- if definition is atomic, then set as dependent to scope
             -- otherwise set dependencies as normal
             let addDependencyIfName = either 
@@ -259,23 +272,103 @@ buildGraph (If e1 e2 e3) = do
 
 --- CODE GENERATION ---
 
-getChildren :: DependencyGraph -> DName -> [DName]
-getChildren (_, ds) n
-    = map (\(_, c, _) -> c) $ filter (\(n', _, _) -> n' == n) ds
+type GeneratedNames = Set DName
+type GenerationState = (DependencyGraph, GeneratedNames)
 
-getParents :: DependencyGraph -> DName -> [DName]
-getParents (_, ds) n
-    = map (\(p, _, _) -> p) $ filter (\(_, n', _) -> n' == n) ds
+
+getChildren :: DName -> State GenerationState (Set DName)
+getChildren n = do
+    ((_, ds), _) <- get
+    return $ Set.fromList [ c | (n', c, DepD) <- ds, n == n' ]
+
+
+getParents :: DName -> State GenerationState (Set DName)
+getParents n = do
+    ((_, ds), _) <- get
+    return $ Set.fromList [ p | (p, n', DepD) <- ds, n == n' ] 
+
+
+getBranch :: DName -> DType -> State GenerationState DName
+getBranch p t = do
+    ((_, ds), _) <- get
+    let bs = [ c | (p', c, t') <- ds, p == p', t == t' ]
+    if length bs == 1
+        then return (head bs)
+        else error "Multiple branches with the same type or branch does not exist"
+
+
+-- children of the given node whose dependencies are met
+satisfiedChildren :: DName -> State GenerationState [DName]
+satisfiedChildren name = do
+    (_, gns) <- get
+    children <- Set.toList <$> getChildren name
+    cps <- zip children <$> mapM getParents children
+    return [c | (c, ps) <- cps, Set.isSubsetOf ps gns]
+
+
+getNode :: DName -> State GenerationState DNode
+getNode name = do
+    ((ns, _), _) <- get
+    return (ns Map.! name)
+
+
+updateGeneratedNames :: DName -> State GenerationState ()
+updateGeneratedNames gn = do
+    (g, gns) <- get
+    put (g, Set.insert gn gns)
+
+-- generateSequentialCode :: DNode -> State GenerationState String
+-- generateSequentialCode Scope = do
+--     return ""
+-- generateSequentialCode (Expression e) = do
+--     return ""
+-- generateSequentialCode (Conditional e) = do
+--     return ""
+
+graphToCode :: DependencyGraph -> String
+graphToCode g
+    = snd $ evalState (generateSequentialCode "_") (g, Set.empty)
+
+generateSequentialCode :: DName -> State GenerationState (DName, String)
+generateSequentialCode name = do
+    updateGeneratedNames name
+    node <- getNode name
+    let 
+        generateChildren = do
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM generateSequentialCode)
+            let mLastName  = if null lns then Nothing else Just (last lns)
+            return (mLastName, intercalate ";" cs)
+    case node of
+        Scope -> do
+            (mLastName, code) <- generateChildren
+            -- TODO: can lastName be valid as nothing?
+            let lastName = Maybe.fromJust mLastName
+            return (lastName, "let " ++ code ++ " in " ++  lastName)
+        Expression e -> do
+            (mLastName, code) <- generateChildren
+            return (Maybe.fromMaybe name mLastName, name ++ " = " ++ show e ++ ";" ++ code)
+        Conditional e -> do
+            (_, thenCode) <- getBranch name DepThen >>= generateSequentialCode
+            (_, elseCode) <- getBranch name DepElse >>= generateSequentialCode
+            (mLastName, code) <- generateChildren
+            let endCode = name ++ " = if " ++ show e 
+                            ++ " then " ++ thenCode 
+                            ++ " else " ++ elseCode 
+                            ++ ";" ++ code
+            return (Maybe.fromMaybe name mLastName, endCode)
+    
+
+    
 
 
 --- GRAPH DRAWING ---
 
-drawDependencyGraph :: DependencyGraph -> IO ()
-drawDependencyGraph (ns, ds) = do
+drawDependencyGraph :: String -> DependencyGraph -> IO ()
+drawDependencyGraph fileName (ns, ds) = do
     let 
         dotGraph = G.graphElemsToDot depGraphParams (Map.toList ns) ds
         dotText = G.printDotGraph dotGraph
-    TL.writeFile "files.dot" dotText
+    TL.writeFile fileName dotText
 
 
 -- Parameters for GraphViz
