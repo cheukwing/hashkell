@@ -1,6 +1,8 @@
 -- Adapted from Write You A Haskell
 module Simple.Syntax where
 
+import Data.List (intercalate)
+
 type Name = String
 
 type Prog = [Decl]
@@ -17,11 +19,22 @@ data Expr
     | Var Name
     | Lit Lit
     | Op BinOp Expr Expr
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show Expr where
+    show (If e1 e2 e3) = "if " ++ show e1 ++ " then " ++ show e2 ++ " else " ++ show e3
+    show (Let ds e)    = "let " ++ intercalate ";" (map show ds) ++ " in " ++ show e
+    show (App e1 e2) = show e1 ++ " " ++ show e2
+    show (Var n) = n
+    show (Lit l) = show l
+    show (Op op e1 e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
 
 data Def
     = Def Name Expr
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show Def where
+    show (Def n e) = n ++ " = " ++ show e
 
 data Lit
     = LInt Int

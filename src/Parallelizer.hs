@@ -1,4 +1,8 @@
-module Parallelizer where
+module Parallelizer (
+    toFunctionTable,
+    FunctionTable,
+    FunctionData(..)
+) where
 
 import Simple.Syntax
 
@@ -19,6 +23,8 @@ data FunctionData
     | Parallel [Name] DependencyGraph
     deriving Show
 
+toFunctionTable :: Prog -> FunctionTable
+toFunctionTable = splitFunctions . buildInitFunctionTable
 
 buildInitFunctionTable :: Prog -> InitFunctionTable
 buildInitFunctionTable 

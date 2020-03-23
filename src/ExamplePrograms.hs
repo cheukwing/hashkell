@@ -1,36 +1,49 @@
 module ExamplePrograms where
 
 import Simple.Syntax
-import DependencyGraph
 
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.IO as TL
-
-import qualified Data.GraphViz as G
-import qualified Data.GraphViz.Attributes.Complete as G
-import qualified Data.GraphViz.Types as G
 
 naiveFibProg :: Prog
 naiveFibProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), naiveFibFunc]
 
+
+naiveFibDefProg :: Prog
+naiveFibDefProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), naiveFibDefFunc]
+
+
 naiveFibFunc :: Decl
 naiveFibFunc =
-    Func "fib" ["n"] 
-        (If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 0))) 
-            (Lit (LInt 1)) 
-            (If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 1))) 
-                (Lit (LInt 1)) 
-                (Op Add 
-                    (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 1)))) 
-                    (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 2))))
-                )
-            )
-        )
+    Func "fib" ["n"] naiveFibExpr
+        
 
-drawDependencyGraph :: Decl -> IO ()
-drawDependencyGraph (Func _ args expr) = do
-    let 
-        (ns, ds) = toDependencyGraph args expr
-        dotGraph = G.graphElemsToDot depGraphParams ns ds
-        dotText = G.printDotGraph dotGraph :: TL.Text
-    TL.writeFile "files.dot" dotText
+naiveFibDefFunc :: Decl
+naiveFibDefFunc =
+    Func "fib" ["n"]  naiveFibDefExpr
+
+
+naiveFibExpr :: Expr
+naiveFibExpr =
+        If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 0))) 
+           (Lit (LInt 1)) 
+           (If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 1))) 
+               (Lit (LInt 1)) 
+               (Op Add 
+                   (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 1)))) 
+                   (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 2))))
+               )
+           )
+
+
+naiveFibDefExpr :: Expr
+naiveFibDefExpr =
+        If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 0))) 
+           (Lit (LInt 1)) 
+           (If (Op Simple.Syntax.EQ (Var "n") (Lit (LInt 1))) 
+               (Lit (LInt 1)) 
+               (Let [ Def "a" (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 1))))
+                    , Def "b" (App (Var "fib") (Op Sub (Var "n") (Lit (LInt 2)))) 
+                    ]
+                    (Op Add (Var "a") (Var "b"))
+               )
+           )
+        

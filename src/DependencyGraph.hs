@@ -1,7 +1,7 @@
 module DependencyGraph (
     DependencyGraph,
     toDependencyGraph,
-    depGraphParams,
+    drawDependencyGraph,
 ) where
 
 import Simple.Syntax
@@ -9,13 +9,20 @@ import Simple.Syntax
 import Control.Monad.State.Strict
 import Data.Either (Either(..), either)
 import qualified Data.Either as Either
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
+-- For drawing graph
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.IO as TL
 import qualified Data.GraphViz as G
 import qualified Data.GraphViz.Attributes.Complete as G
 import qualified Data.GraphViz.Types as G
 
-type DependencyGraph = ([DependencyNode], [Dependency])
-type DependencyNode = (DName, DNode)
+
+
+type DependencyGraph = (NodeTable, [Dependency])
+type NodeTable = Map DName DNode
 type Dependency = (DName, DName, DType)
 
 type DName = String
@@ -47,6 +54,8 @@ instance Show DExpr where
 
 type FunctionState = (DependencyGraph, [Name], Int, DName)
 
+
+--- GRAPH BUILDING ---
 
 depName :: State FunctionState DName
 depName = do
@@ -105,7 +114,7 @@ addConditionalDependency c t e = do
 
 addNode :: DependencyGraph -> DName -> DNode -> DependencyGraph
 addNode (ns, ds) name node =
-    ((name, node) : ns, ds)
+    (Map.insert name node ns, ds)
 
 
 addDependencyNode :: DName -> DNode -> State FunctionState ()
@@ -133,11 +142,11 @@ incrementCounter = do
 toDependencyGraph :: [String] -> Expr -> DependencyGraph
 toDependencyGraph args defn
     = case xn of
-        Left x -> ([("_", Expression x)], [])
+        Left x -> (Map.fromList [("_", Expression x)], [])
         _      -> graph
     where
         (xn, (graph, _, _, _))  = runState (buildGraph defn) initState
-        initState = (([("_", Scope)], []), args, 0, "_")
+        initState = ((Map.fromList [("_", Scope)], []), args, 0, "_")
 
 
 buildGraph :: Expr -> State FunctionState (Either DExpr DName)
@@ -247,6 +256,27 @@ buildGraph (If e1 e2 e3) = do
             addDependencyNode name (Conditional (DVar n))
             Right <$> incrementCounter)
         cxn
+
+--- CODE GENERATION ---
+
+getChildren :: DependencyGraph -> DName -> [DName]
+getChildren (_, ds) n
+    = map (\(_, c, _) -> c) $ filter (\(n', _, _) -> n' == n) ds
+
+getParents :: DependencyGraph -> DName -> [DName]
+getParents (_, ds) n
+    = map (\(p, _, _) -> p) $ filter (\(_, n', _) -> n' == n) ds
+
+
+--- GRAPH DRAWING ---
+
+drawDependencyGraph :: DependencyGraph -> IO ()
+drawDependencyGraph (ns, ds) = do
+    let 
+        dotGraph = G.graphElemsToDot depGraphParams (Map.toList ns) ds
+        dotText = G.printDotGraph dotGraph
+    TL.writeFile "files.dot" dotText
+
 
 -- Parameters for GraphViz
 depGraphParams :: G.GraphvizParams DName DNode DType () DNode
