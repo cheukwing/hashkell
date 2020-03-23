@@ -1,8 +1,8 @@
 module DependencyGraph (
     DependencyGraph,
-    toDependencyGraph,
+    createDependencyGraph,
     drawDependencyGraph,
-    graphToCode
+    encodeDependencyGraph
 ) where
 
 import Simple.Syntax
@@ -25,9 +25,6 @@ import qualified Data.GraphViz as G
 import qualified Data.GraphViz.Attributes.Complete as G
 import qualified Data.GraphViz.Types as G
 
-
--- DEBUG: remove me!
-import Debug.Trace
 
 type DependencyGraph = (NodeTable, [Dependency])
 type NodeTable = Map DName DNode
@@ -151,8 +148,8 @@ incrementCounter = do
     return name
 
 
-toDependencyGraph :: [String] -> Expr -> DependencyGraph
-toDependencyGraph args defn
+createDependencyGraph :: [String] -> Expr -> DependencyGraph
+createDependencyGraph args defn
     = case xn of
         --Left x -> (Map.fromList [("_", Expression x)], [])
         Left x -> (Map.fromList [("_", Scope), ("_x0", Expression x)], [("_", "_x0", DepD)])
@@ -317,16 +314,9 @@ updateGeneratedNames gn = do
     (g, gns) <- get
     put (g, Set.insert gn gns)
 
--- generateSequentialCode :: DNode -> State GenerationState String
--- generateSequentialCode Scope = do
---     return ""
--- generateSequentialCode (Expression e) = do
---     return ""
--- generateSequentialCode (Conditional e) = do
---     return ""
 
-graphToCode :: DependencyGraph -> String
-graphToCode g
+encodeDependencyGraph :: DependencyGraph -> String
+encodeDependencyGraph g
     = snd $ evalState (generateSequentialCode "_") (g, Set.empty)
 
 generateSequentialCode :: DName -> State GenerationState (DName, String)
@@ -337,7 +327,7 @@ generateSequentialCode name = do
         generateChildren = do
             (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM generateSequentialCode)
             let mLastName  = if null lns then Nothing else Just (last lns)
-            return (mLastName, intercalate ";" cs)
+            return (mLastName, intercalate "; " cs)
     case node of
         Scope -> do
             (mLastName, code) <- generateChildren
@@ -346,7 +336,10 @@ generateSequentialCode name = do
             return (lastName, "let " ++ code ++ " in " ++  lastName)
         Expression e -> do
             (mLastName, code) <- generateChildren
-            return (Maybe.fromMaybe name mLastName, name ++ " = " ++ show e ++ ";" ++ code)
+            let expCode = name ++ " = " ++ show e
+            case mLastName of
+                Just lastName -> return (lastName, expCode ++ "; " ++ code)
+                Nothing       -> return (name, expCode)
         Conditional e -> do
             (_, thenCode) <- getBranch name DepThen >>= generateSequentialCode
             (_, elseCode) <- getBranch name DepElse >>= generateSequentialCode
@@ -354,7 +347,7 @@ generateSequentialCode name = do
             let endCode = name ++ " = if " ++ show e 
                             ++ " then " ++ thenCode 
                             ++ " else " ++ elseCode 
-                            ++ ";" ++ code
+                            ++ "; " ++ code
             return (Maybe.fromMaybe name mLastName, endCode)
     
 

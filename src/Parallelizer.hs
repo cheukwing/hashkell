@@ -1,5 +1,5 @@
 module Parallelizer (
-    toFunctionTable,
+    createFunctionTable,
     FunctionTable,
     FunctionData(..)
 ) where
@@ -9,7 +9,7 @@ import Simple.Syntax
 import Prelude hiding (EQ, GT, LT)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import DependencyGraph (toDependencyGraph, DependencyGraph)
+import DependencyGraph
 
 type FunctionDefn = Expr
 type FunctionCplx = Expr
@@ -23,8 +23,8 @@ data FunctionData
     | Parallel [Name] DependencyGraph
     deriving Show
 
-toFunctionTable :: Prog -> FunctionTable
-toFunctionTable = splitFunctions . buildInitFunctionTable
+createFunctionTable :: Prog -> FunctionTable
+createFunctionTable = splitFunctions . buildInitFunctionTable
 
 buildInitFunctionTable :: Prog -> InitFunctionTable
 buildInitFunctionTable 
@@ -92,7 +92,7 @@ splitFunctions
                 split          = Map.fromList 
                                     [ (name, Sequential args branchingCall)
                                     , (seqName, Sequential args defn)
-                                    , (parName, Parallel args (toDependencyGraph args defn))
+                                    , (parName, Parallel args (createDependencyGraph args defn))
                                     ]
                 seqName        = name ++ "_seq"
                 parName        = name ++ "_par"
