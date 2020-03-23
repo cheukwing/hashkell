@@ -315,32 +315,39 @@ updateGeneratedNames gn = do
     put (g, Set.insert gn gns)
 
 
-encodeDependencyGraph :: DependencyGraph -> String
-encodeDependencyGraph g
+encodeDependencyGraph :: DependencyGraph -> Bool -> String
+encodeDependencyGraph g False
     = snd $ evalState (generateSequentialCode "_") (g, Set.empty)
+encodeDependencyGraph g True
+    = snd $ evalState (generateParallelCode "_") (g, Set.empty)
+
 
 generateSequentialCode :: DName -> State GenerationState (DName, String)
 generateSequentialCode name = do
     updateGeneratedNames name
     node <- getNode name
-    let 
-        generateChildren = do
+    -- generate the code for the children of the current node, if all other
+    -- dependencies for that child have already been generated
+    let generateChildren = do
             (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM generateSequentialCode)
             let mLastName  = if null lns then Nothing else Just (last lns)
             return (mLastName, intercalate "; " cs)
     case node of
         Scope -> do
+            -- Scope is encoded as `let {children} in {final descendent}`
             (mLastName, code) <- generateChildren
-            -- TODO: can lastName be valid as nothing?
             let lastName = Maybe.fromJust mLastName
             return (lastName, "let " ++ code ++ " in " ++  lastName)
         Expression e -> do
+            -- Expression is encoded as `{name} = {e} {; children}`
             (mLastName, code) <- generateChildren
             let expCode = name ++ " = " ++ show e
             case mLastName of
                 Just lastName -> return (lastName, expCode ++ "; " ++ code)
                 Nothing       -> return (name, expCode)
         Conditional e -> do
+            -- Conditional is encoded as 
+            -- `{name} = if {e} then {then code} else {else code} ; {children}`
             (_, thenCode) <- getBranch name DepThen >>= generateSequentialCode
             (_, elseCode) <- getBranch name DepElse >>= generateSequentialCode
             (mLastName, code) <- generateChildren
@@ -349,8 +356,10 @@ generateSequentialCode name = do
                             ++ " else " ++ elseCode 
                             ++ "; " ++ code
             return (Maybe.fromMaybe name mLastName, endCode)
-    
 
+    
+generateParallelCode :: DName -> State GenerationState (DName, String)
+generateParallelCode name = return ("", "")
     
 
 

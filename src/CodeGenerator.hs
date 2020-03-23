@@ -16,7 +16,8 @@ generateCode
         generateCode' (n, Sequential args e)
             = defnCode n args ++ show e
         generateCode' (n, Parallel args g)
-            = defnCode n args ++ encodeDependencyGraph g
+            = defnCode n args ++ encodeDependencyGraph g False
+
 
 writeCode :: String -> Prog -> IO ()
 writeCode fileName =
