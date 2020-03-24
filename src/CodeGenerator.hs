@@ -16,9 +16,17 @@ generateCode
         generateCode' (n, Sequential args e)
             = defnCode n args ++ show e
         generateCode' (n, Parallel args g)
-            = defnCode n args ++ encodeDependencyGraph g False
+            = defnCode n args ++ encodeDependencyGraph g True
 
 
 writeCode :: String -> Prog -> IO ()
 writeCode fileName =
     writeFile fileName . generateCode . createFunctionTable
+
+
+drawGraphs :: Prog -> IO ()
+drawGraphs prog 
+    = mapM_ (uncurry drawDependencyGraph) ngs
+    where 
+        ftMap = Map.toList (createFunctionTable prog)
+        ngs   = [(n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
