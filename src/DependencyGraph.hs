@@ -270,24 +270,25 @@ buildGraph (If e1 e2 e3) = do
 --- CODE GENERATION ---
 
 type GeneratedNames = Set DName
-type GenerationState = (DependencyGraph, GeneratedNames)
+type ParallelisedScope = Bool
+type GenerationState = (DependencyGraph, GeneratedNames, ParallelisedScope)
 
 
 getChildren :: DName -> State GenerationState (Set DName)
 getChildren n = do
-    ((_, ds), _) <- get
+    ((_, ds), _, _) <- get
     return $ Set.fromList [ c | (n', c, DepD) <- ds, n == n' ]
 
 
 getParents :: DName -> State GenerationState (Set DName)
 getParents n = do
-    ((_, ds), _) <- get
+    ((_, ds), _, _) <- get
     return $ Set.fromList [ p | (p, n', DepD) <- ds, n == n' ] 
 
 
 getBranch :: DName -> DType -> State GenerationState DName
 getBranch p t = do
-    ((_, ds), _) <- get
+    ((_, ds), _, _) <- get
     let bs = [ c | (p', c, t') <- ds, p == p', t == t' ]
     if length bs == 1
         then return (head bs)
@@ -297,7 +298,7 @@ getBranch p t = do
 -- children of the given node whose dependencies are met
 satisfiedChildren :: DName -> State GenerationState [DName]
 satisfiedChildren name = do
-    (_, gns) <- get
+    (_, gns, _) <- get
     children <- Set.toList <$> getChildren name
     cps <- zip children <$> mapM getParents children
     return [c | (c, ps) <- cps, Set.isSubsetOf ps gns]
@@ -305,21 +306,21 @@ satisfiedChildren name = do
 
 getNode :: DName -> State GenerationState DNode
 getNode name = do
-    ((ns, _), _) <- get
+    ((ns, _), _, _) <- get
     return (ns Map.! name)
 
 
 updateGeneratedNames :: DName -> State GenerationState ()
 updateGeneratedNames gn = do
-    (g, gns) <- get
-    put (g, Set.insert gn gns)
+    (g, gns, par) <- get
+    put (g, Set.insert gn gns, par)
 
 
 encodeDependencyGraph :: DependencyGraph -> Bool -> String
 encodeDependencyGraph g False
-    = snd $ evalState (generateSequentialCode "_") (g, Set.empty)
+    = snd $ evalState (generateSequentialCode "_") (g, Set.empty, False)
 encodeDependencyGraph g True
-    = snd $ evalState (generateParallelCode "_") (g, Set.empty)
+    = snd $ evalState (generateParallelCode "_") (g, Set.empty, False)
 
 
 generateSequentialCode :: DName -> State GenerationState (DName, String)
@@ -330,7 +331,7 @@ generateSequentialCode name = do
     -- dependencies for that child have already been generated
     let generateChildren = do
             (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM generateSequentialCode)
-            let mLastName  = if null lns then Nothing else Just (last lns)
+            let mLastName = if null lns then Nothing else Just (last lns)
             return (mLastName, intercalate "; " cs)
     case node of
         Scope -> do
@@ -357,10 +358,77 @@ generateSequentialCode name = do
                             ++ "; " ++ code
             return (Maybe.fromMaybe name mLastName, endCode)
 
+
+setParallelisedScope :: Bool -> State GenerationState Bool
+setParallelisedScope par = do
+    (g, gns, par') <- get
+    put (g, gns, par)
+    return par'
+
+
+getParallelisedScope :: State GenerationState Bool
+getParallelisedScope = do
+    (_, _, par) <- get
+    return par
+
+
+scopeContainsParallelism :: DName -> State GenerationState Bool
+scopeContainsParallelism start =
+    or <$> (Set.toList <$> getChildren start >>= mapM scopeContainsParallelism')
+    where 
+        scopeContainsParallelism' :: DName -> State GenerationState Bool
+        scopeContainsParallelism' name = do
+            node <- getNode name
+            case node of
+                Scope              -> return False
+                Expression DApp{}  -> return True
+                Conditional DApp{} -> return True
+                _                  ->
+                    or <$> (Set.toList <$> getChildren name >>= mapM scopeContainsParallelism')
+
     
 generateParallelCode :: DName -> State GenerationState (DName, String)
-generateParallelCode name = return ("", "")
-    
+generateParallelCode name = do
+    updateGeneratedNames name
+    node <- getNode name
+    let generateChildren = do
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM generateParallelCode)
+            let mLastName = if null lns then Nothing else Just (last lns)
+            return (mLastName, intercalate "; " cs)
+    case node of
+        Scope -> do
+            par <- scopeContainsParallelism name
+            oldPar <- setParallelisedScope par
+            (mLastName, code) <- generateChildren
+            let lastName = Maybe.fromJust mLastName
+            setParallelisedScope oldPar
+            let finalCode = if par
+                then "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
+                else "let " ++ code ++ " in " ++ lastName
+            return (lastName, finalCode)
+        Expression e -> do
+            (mLastName, code) <- generateChildren
+            par <- getParallelisedScope
+            let expCode = case (par, e) of
+                    (_, DApp f args) -> 
+                        name ++ " <- rpar (" ++ unwords (f : map show args) ++ ")"
+                    (True, _)        ->
+                        "let { " ++ name ++ " = " ++ show e ++ " }"
+                    _                ->
+                        name ++ " = " ++ show e
+            case mLastName of
+                Just lastName -> return (lastName, expCode ++ "; " ++ code)
+                Nothing       -> return (name, expCode)
+        Conditional e -> do
+            (_, thenCode) <- getBranch name DepThen >>= generateParallelCode
+            (_, elseCode) <- getBranch name DepElse >>= generateParallelCode
+            (mLastName, code) <- generateChildren
+            par <- getParallelisedScope
+            let condCode = name ++ " = if " ++ show e 
+                            ++ " then " ++ thenCode 
+                            ++ " else " ++ elseCode 
+            let endCode = if par then "let { " ++ condCode ++ " }" else condCode
+            return (Maybe.fromMaybe name mLastName, endCode ++ "; " ++ code)
 
 
 --- GRAPH DRAWING ---

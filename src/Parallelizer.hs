@@ -23,8 +23,10 @@ data FunctionData
     | Parallel [Name] DependencyGraph
     deriving Show
 
+
 createFunctionTable :: Prog -> FunctionTable
-createFunctionTable = splitFunctions . buildInitFunctionTable
+createFunctionTable = splitFunctions 100 . buildInitFunctionTable
+
 
 buildInitFunctionTable :: Prog -> InitFunctionTable
 buildInitFunctionTable 
@@ -79,8 +81,8 @@ freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
 
 
-splitFunctions :: InitFunctionTable -> FunctionTable
-splitFunctions 
+splitFunctions :: Int -> InitFunctionTable -> FunctionTable
+splitFunctions steps
     = Map.foldlWithKey splitFunction Map.empty
     where
         splitFunction :: FunctionTable -> Name -> InitFunctionData -> FunctionTable
@@ -97,7 +99,7 @@ splitFunctions
                 seqName        = name ++ "_seq"
                 parName        = name ++ "_par"
                 callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
-                branchingCall  = If (Op LT cplx (Lit (LInt 100)))
+                branchingCall  = If (Op LT cplx (Lit (LInt steps)))
                                                 (callFunction $ name ++ "_seq")
                                                 (callFunction $ name ++ "_par")
                                  
