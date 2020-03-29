@@ -38,8 +38,9 @@ data FunctionData
     deriving Show
 
 
-createFunctionTable :: Prog -> FunctionTable
-createFunctionTable = splitFunctions 100 . buildInitFunctionTable
+createFunctionTable :: Prog -> Int -> FunctionTable
+createFunctionTable prog steps
+    = buildFunctionTable steps (buildInitFunctionTable prog)
 
 
 buildInitFunctionTable :: Prog -> InitFunctionTable
@@ -119,8 +120,8 @@ freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
 
 
-splitFunctions :: Int -> InitFunctionTable -> FunctionTable
-splitFunctions steps
+buildFunctionTable :: Int -> InitFunctionTable -> FunctionTable
+buildFunctionTable steps
     = Map.foldlWithKey splitFunction Map.empty
     where
         splitFunction :: FunctionTable -> Name -> InitFunctionData -> FunctionTable

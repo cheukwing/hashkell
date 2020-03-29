@@ -19,14 +19,14 @@ generateCode
             = defnCode n args ++ encodeDependencyGraph g True
 
 
-writeCode :: String -> Prog -> IO ()
-writeCode fileName =
-    writeFile fileName . generateCode . createFunctionTable
+writeCode :: String -> Prog -> Int -> IO ()
+writeCode fileName prog steps =
+    writeFile fileName $ generateCode $ createFunctionTable prog steps
 
 
-drawGraphs :: Prog -> IO ()
-drawGraphs prog 
+drawGraphs :: Prog -> Int -> IO ()
+drawGraphs prog steps
     = mapM_ (uncurry drawDependencyGraph) ngs
     where 
-        ftMap = Map.toList (createFunctionTable prog)
+        ftMap = Map.toList (createFunctionTable prog steps)
         ngs   = [(n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
