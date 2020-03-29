@@ -1,6 +1,8 @@
 # simple-haskell
 
-Parser for a simple subset of Haskell with time complexity annotations.
+Parser for a simple subset of Haskell with time complexity annotations and dependency graphs.
+
+## Example of Supported Code
 
 ```haskell
 fib ## 2^n;
@@ -15,12 +17,16 @@ fib n =
             } in a + b;
 ```
 
+### Generated Dependency Graph
+
+![Dependency graph for the naive fib function](/imgs/naivefibdefgraph.svg "Dependency Graph")
+
 ## Time Complexity Annotations
 
-Time complexity annotations are used by the compiler to generate branching paths for paralellisation.
+Time complexity annotations are used by the compiler to generate branching paths for parallelisation.
 Annotations are written using `##`, as so:
 
-```
+```haskell
 <function-name> ## <time-complexity>;
 ```
 

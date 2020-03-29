@@ -24,9 +24,9 @@ writeCode fileName prog steps =
     writeFile fileName $ generateCode $ createFunctionTable prog steps
 
 
-drawGraphs :: Prog -> Int -> IO ()
-drawGraphs prog steps
+drawGraphs :: Prog -> IO ()
+drawGraphs prog
     = mapM_ (uncurry drawDependencyGraph) ngs
     where 
-        ftMap = Map.toList (createFunctionTable prog steps)
+        ftMap = Map.toList (createFunctionTable prog 0)
         ngs   = [(n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
