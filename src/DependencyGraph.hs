@@ -66,18 +66,23 @@ type Counter = Int
 type CurrentScope = DName
 type FunctionState = (DependencyGraph, Args, Counter, CurrentScope)
 
+-- depName returns a unique identifier based on the current counter.
 depName :: State FunctionState DName
 depName = do
     (_, _, counter, _) <- get
     return ("_x" ++ show counter)
 
 
+-- scopeName returns an unique name for the current scope based on the current
+-- counter. 
 scopeName :: State FunctionState DName
 scopeName = do
     (_, _, counter, _) <- get
     return ("_" ++ show counter)
 
 
+-- setScope sets the current scope to the given scope, and returns the previous
+-- scope in the state.
 setScope :: DName -> State FunctionState DName
 setScope s = do
     (graph, args, counter, scope) <- get
@@ -85,35 +90,43 @@ setScope s = do
     return scope
 
 
-existsDependency :: DependencyGraph -> DName -> Bool
-existsDependency (_, ds) name =
+-- hasParent checks if the node with the given name has any parent nodes.
+hasParent :: DependencyGraph -> DName -> Bool
+hasParent (_, ds) name =
     any (\(_, child, _) -> child == name) ds
 
 
+-- addArc adds an arc from parent to child into the graph
 addArc :: DependencyGraph -> DName -> DName -> DependencyGraph
 addArc (ns, ds) parent child =
     (ns, (parent, child, DepD) : ds)
 
 
+-- addDependency adds an arc from parent to child into the state
 addDependency :: DName -> DName -> State FunctionState ()
 addDependency parent child = do
     (graph, args, counter, scope) <- get
+    -- if the parent name is actually an argument, then set the parent to be
+    -- the scope, to limit its evaluation to the current scope
     if parent `elem` args then
         put (addArc graph scope child, args, counter, scope)
     else
         put (addArc graph parent child, args, counter, scope)
 
 
+-- addScopeDependency explicitly adds an arc from the current scope to the 
+-- child, if such an arc does not already exist
 addScopeDependency :: DName -> State FunctionState ()
 addScopeDependency child = do
     (graph, args, counter, scope) <- get
-    -- TODO: check if equivalent to old method
-    if existsDependency graph child then
+    if hasParent graph child then
         return ()
     else
         put (addArc graph scope child, args, counter, scope)
 
 
+-- addConditionalDependency sets up the dependency arcs for a conditional node,
+-- given its 'then' and 'else' scope nodes.
 addConditionalDependency :: DName -> DName -> DName -> State FunctionState ()
 addConditionalDependency c t e = do
     ((ns, ds), args, counter, scope) <- get
@@ -121,17 +134,21 @@ addConditionalDependency c t e = do
         , args, counter, scope)
 
 
+-- addNode inserts a node with the given name into the graph.
 addNode :: DependencyGraph -> DName -> DNode -> DependencyGraph
 addNode (ns, ds) name node =
     (Map.insert name node ns, ds)
 
 
+-- addDependencyNode inserts a node with the given name into the state.
 addDependencyNode :: DName -> DNode -> State FunctionState ()
 addDependencyNode name node = do
     (graph, args, counter, scope) <- get
     put (addNode graph name node, args, counter, scope)
 
 
+-- addScope inserts a scope node into the state using the current counter,
+-- increments the counter for uniqueness, then returns the generated name.
 addScope :: State FunctionState DName
 addScope = do
     (graph, args, counter, scope) <- get
@@ -140,6 +157,8 @@ addScope = do
     return name
 
 
+-- incrementCounter increments the current counter, while also returning the
+-- depName generated from the previous counter for reference.
 incrementCounter :: State FunctionState DName
 incrementCounter = do
     (graph, args, counter, scope) <- get
@@ -148,6 +167,8 @@ incrementCounter = do
     return name
 
 
+-- createDependencyGraph creates the dependency graph with the given argument
+-- names and expression.
 createDependencyGraph :: [String] -> Expr -> DependencyGraph
 createDependencyGraph args defn
     = case xn of
@@ -159,6 +180,10 @@ createDependencyGraph args defn
         initState = ((Map.fromList [("_", Scope)], []), args, 0, "_")
 
 
+-- buildGraph recursively builds a graph from the given expression,
+-- each call returns either the dependency expression generated if it is a
+-- atomic expression (trivial to compute), or the name of the node in which
+-- the value is stored.
 buildGraph :: Expr -> State FunctionState (Either DExpr DName)
 buildGraph (Lit lit) =
     -- literals are atomic
@@ -274,18 +299,25 @@ type ParallelisedScope = Bool
 type GenerationState = (DependencyGraph, GeneratedNames, ParallelisedScope)
 
 
+-- getChildren returns a set of all children of the given node, except those
+-- with conditional dependencies.
 getChildren :: DName -> State GenerationState (Set DName)
 getChildren n = do
     ((_, ds), _, _) <- get
     return $ Set.fromList [ c | (n', c, DepD) <- ds, n == n' ]
 
 
+-- getParents returns a set of all parents of the given node, except those
+-- with conditional dependencies.
 getParents :: DName -> State GenerationState (Set DName)
 getParents n = do
     ((_, ds), _, _) <- get
     return $ Set.fromList [ p | (p, n', DepD) <- ds, n == n' ] 
 
 
+-- getBranch finds the name of the node which is a branch of the given node
+-- and has the given dependency type. Used for finding the conditional
+-- dependencies, and not for regular dependencies.
 getBranch :: DName -> DType -> State GenerationState DName
 getBranch p t = do
     ((_, ds), _, _) <- get
@@ -295,7 +327,8 @@ getBranch p t = do
         else error "Multiple branches with the same type or branch does not exist"
 
 
--- children of the given node whose dependencies are met
+-- satisifiedChildren returns the children of the given node whose 
+-- dependencies are met, i.e. their code has been generated.
 satisfiedChildren :: DName -> State GenerationState [DName]
 satisfiedChildren name = do
     (_, gns, _) <- get
@@ -304,18 +337,23 @@ satisfiedChildren name = do
     return [c | (c, ps) <- cps, Set.isSubsetOf ps gns]
 
 
+-- getNode retrieves the node with the given name.
 getNode :: DName -> State GenerationState DNode
 getNode name = do
     ((ns, _), _, _) <- get
     return (ns Map.! name)
 
 
+-- updateGeneratedNames records that a node with the given name has had its
+-- code generated.
 updateGeneratedNames :: DName -> State GenerationState ()
 updateGeneratedNames gn = do
     (g, gns, par) <- get
     put (g, Set.insert gn gns, par)
 
 
+-- encodeDependencyGraph generates code from the given dependency graph,
+-- either encoding it sequentially if False, else parallelised.
 encodeDependencyGraph :: DependencyGraph -> Bool -> String
 encodeDependencyGraph g False
     = snd $ evalState (generateSequentialCode "_") (g, Set.empty, False)
@@ -359,6 +397,8 @@ generateSequentialCode name = do
             return (Maybe.fromMaybe name mLastName, endCode)
 
 
+-- setParallelisedScope sets whether the current code in the current scope
+-- in the graph should generate parallel code.
 setParallelisedScope :: Bool -> State GenerationState Bool
 setParallelisedScope par = do
     (g, gns, par') <- get
@@ -366,12 +406,18 @@ setParallelisedScope par = do
     return par'
 
 
+-- getParallelisedScope retrieves the bool determining whether the current code
+-- in the current scope in the graph should be parallelised.
 getParallelisedScope :: State GenerationState Bool
 getParallelisedScope = do
     (_, _, par) <- get
     return par
 
 
+-- scopeContainsParallelism returns whether the current scope in the graph
+-- contains any nodes which should be generated in parallel, i.e. if it
+-- contains any function calls.
+-- TODO: do not parallelise if only one path
 scopeContainsParallelism :: DName -> State GenerationState Bool
 scopeContainsParallelism start =
     or <$> (Set.toList <$> getChildren start >>= mapM scopeContainsParallelism')
