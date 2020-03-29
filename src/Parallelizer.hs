@@ -7,17 +7,31 @@ module Parallelizer (
 import Simple.Syntax
 
 import Prelude hiding (EQ, GT, LT)
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Either (Either)
+import qualified Data.Either as Either
 import DependencyGraph
 
 type FunctionDefn = Expr
-type FunctionCplx = Expr
--- TODO: consider using maybes for defn and cplx
-type InitFunctionData = ([Name], FunctionDefn, FunctionCplx)
-type InitFunctionTable = Map.Map Name InitFunctionData
 
-type FunctionTable = Map.Map Name FunctionData
+-- TODO: support factorial
+data Complexity
+    = Constant Int
+    | Polynomial Name Int
+    | Exponential Int Name
+    | Logarithmic Name
+
+
+data InitFunctionData 
+    = JustAnnotation Expr
+    | JustDefinition [Name] FunctionDefn
+    | ComplexityAndDefinition [Name] FunctionDefn Complexity
+type InitFunctionTable = Map Name InitFunctionData
+
+type FunctionTable = Map Name FunctionData
 data FunctionData
     = Sequential [Name] FunctionDefn
     | Parallel [Name] DependencyGraph
@@ -33,39 +47,63 @@ buildInitFunctionTable
     = foldl buildFunctionTable' Map.empty
     where
         buildFunctionTable' :: InitFunctionTable -> Decl -> InitFunctionTable
-        buildFunctionTable' ft (Func name args expr)
-            | isMember && fvsValid  = Map.insert name (args, expr, cplx) ft
-            | otherwise             = Map.insert name (args, expr, Lit (LInt 1)) ft
-            where
-                isMember     = Map.member name ft
-                (_, _, cplx) = (Map.!) ft name
-                fvsValid     = Set.foldl (\t v -> ((&&) t . flip elem args) v) True (freeVariables cplx)
-        buildFunctionTable' ft (Cplx name expr)
-            | isValid && isMember && fvsValid = Map.insert name (args, defn, expr) ft
-            | isValid && not isMember         = Map.insert name ([], Lit (LInt 1), expr) ft
-            | otherwise                       = ft
-            where
-                isValid         = isValidComplexity expr
-                isMember        = Map.member name ft
-                (args, defn, _) = (Map.!) ft name
-                fvsValid        = Set.foldl (\t v -> ((&&) t . flip elem args) v) True (freeVariables expr)
+        buildFunctionTable' ft (Func name args defn)
+            = case Map.lookup name ft of
+                Just (JustAnnotation e) -> 
+                    Map.insert name (ComplexityAndDefinition args defn (parseComplexity args e)) ft
+                Just _                  ->
+                    error $ "Duplicate definition of function " ++ name
+                Nothing                 ->
+                    Map.insert name (JustDefinition args defn) ft
+        buildFunctionTable' ft (Cplx name e)
+            = case Map.lookup name ft of
+                Just (JustDefinition args defn) -> 
+                    Map.insert name (ComplexityAndDefinition args defn (parseComplexity args e)) ft
+                Just _                  ->
+                    error $ "Duplicate complexity annotation for function " ++ name
+                Nothing                 ->
+                    Map.insert name (JustAnnotation e) ft
 
 
-isValidComplexity :: Expr -> Bool
-isValidComplexity If{}           = False
-isValidComplexity Let{}          = False
--- TODO: support log application
-isValidComplexity App{}          = False
-isValidComplexity Var{}          = True
-isValidComplexity (Lit (LInt _)) = True
-isValidComplexity Lit{}          = False
-isValidComplexity (Op op e1 e2)
-    = op `elem` [Add, Sub, Mul, Div, Exp] 
-        && isValidComplexity e1 
-        && isValidComplexity e2
+parseComplexity :: [Name] -> Expr -> Complexity
+parseComplexity args expr
+    | fvsValid && sizeValid = parseComplexityExpression expr
+    | not fvsValid          = error errorFvsMsg
+    | otherwise             = error errorSizeMsg
+    where
+        fvs          = freeVariables expr
+        fvsValid     = Set.isSubsetOf fvs (Set.fromList args)
+        sizeValid    = Set.size fvs <= 1
+        errorFvsMsg  = "The time complexity annotation " ++ show expr ++ " is incompatible with the function definition"
+        errorSizeMsg = "The time complexity annotation " ++ show expr ++ " is unsupported as it contains more than 1 name"
 
 
-freeVariables :: Expr -> Set.Set Name
+parseComplexityExpression :: Expr -> Complexity
+parseComplexityExpression If{} 
+    = error "Cannot use 'if' in a time complexity annotation"
+parseComplexityExpression Let{} 
+    = error "Cannot use 'let' in a time complexity annotation"
+parseComplexityExpression (App (Var "log") (Var name)) 
+    = Logarithmic name
+parseComplexityExpression (App (Var "log") _) 
+    = error "Only logarithmic complexity with a single name is supported"
+parseComplexityExpression App{}
+    = error "Cannot use arbitrary function application in a time complexity annotation"
+parseComplexityExpression (Var name)
+    = Polynomial name 1
+parseComplexityExpression (Lit (LInt n))
+    = Constant n
+parseComplexityExpression Lit{}
+    = error "Cannot use arbitrary literal in a time complexity annotation"
+parseComplexityExpression (Op Exp (Var name) (Lit (LInt n)))
+    = Polynomial name n
+parseComplexityExpression (Op Exp (Lit (LInt n)) (Var name))
+    = Exponential n name
+parseComplexityExpression Op{}
+    = error "Only polynomials and exponentials with a single name are supported"
+
+
+freeVariables :: Expr -> Set Name
 freeVariables (If e1 e2 e3)
     = Set.unions [freeVariables e1, freeVariables e2, freeVariables e3]
 freeVariables (Let defs e)
@@ -86,20 +124,37 @@ splitFunctions steps
     = Map.foldlWithKey splitFunction Map.empty
     where
         splitFunction :: FunctionTable -> Name -> InitFunctionData -> FunctionTable
-        splitFunction st name fd @ (args, defn, Lit{})
-            = Map.insert name (Sequential args defn) st
-        splitFunction st name (args, defn, cplx)
-            = Map.union split st
+        splitFunction ft name JustAnnotation{}
+            = ft
+        splitFunction ft name (JustDefinition args defn)
+            = Map.insert name (Sequential args defn) ft
+        splitFunction ft name (ComplexityAndDefinition args defn cplx)
+            = case complexityToBoundary cplx steps of
+                Left False     -> 
+                    Map.insert name sequential ft
+                Left True      ->
+                    Map.insert name parallel ft
+                Right cplxExpr ->
+                    Map.union (Map.fromList [ (name, Sequential args branchingCall)
+                                            , (seqName, sequential)
+                                            , (parName, parallel)
+                                            ]) ft
+                    where
+                        seqName        = name ++ "_seq"
+                        parName        = name ++ "_par"
+                        callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
+                        branchingCall  = If cplxExpr (callFunction seqName) (callFunction parName)
             where
-                split          = Map.fromList 
-                                    [ (name, Sequential args branchingCall)
-                                    , (seqName, Sequential args defn)
-                                    , (parName, Parallel args (createDependencyGraph args defn))
-                                    ]
-                seqName        = name ++ "_seq"
-                parName        = name ++ "_par"
-                callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
-                branchingCall  = If (Op LT cplx (Lit (LInt steps)))
-                                                (callFunction $ name ++ "_seq")
-                                                (callFunction $ name ++ "_par")
+                sequential = Sequential args defn
+                parallel   = Parallel args (createDependencyGraph args defn)
                                  
+
+complexityToBoundary :: Complexity -> Int -> Either Bool Expr
+complexityToBoundary (Constant n) steps
+    = Left (n > steps)
+complexityToBoundary (Polynomial name n) steps
+    = Right (Op LT (Var name) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n)))))
+complexityToBoundary (Exponential n name) steps
+    = Right (Op LT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps)))))
+complexityToBoundary (Logarithmic name) steps
+    = Right (Op LT (Var name) (Lit (LInt (2 ^ steps))))
