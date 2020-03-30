@@ -26,8 +26,9 @@ import qualified Data.GraphViz.Attributes.Complete as G
 import qualified Data.GraphViz.Types as G
 
 
-type DependencyGraph = (NodeTable, [Dependency])
+type DependencyGraph = (NodeTable, Dependencies)
 type NodeTable = Map DName DNode
+type Dependencies = Set Dependency
 type Dependency = (DName, DName, DType)
 
 type DName = String
@@ -36,7 +37,8 @@ data DType
     = DepD
     | DepThen
     | DepElse
-    deriving (Eq, Show)
+    | DepArg
+    deriving (Eq, Show, Ord)
 
 data DNode
     = Scope
@@ -93,25 +95,42 @@ setScope s = do
 -- hasParent checks if the node with the given name has any parent nodes.
 hasParent :: DependencyGraph -> DName -> Bool
 hasParent (_, ds) name =
-    any (\(_, child, _) -> child == name) ds
+    not $ null $ Set.filter (\(_, c, t) -> c == name && t == DepD) ds
 
 
--- addArc adds an arc from parent to child into the graph
-addArc :: DependencyGraph -> DName -> DName -> DependencyGraph
-addArc (ns, ds) parent child =
-    (ns, (parent, child, DepD) : ds)
+addArc :: Dependency -> State FunctionState ()
+addArc d = do
+    ((ns, ds), args, counter, scope) <- get
+    put ((ns, Set.insert d ds), args, counter, scope)
+
+
+isDescendentOf :: DName -> DName -> State FunctionState Bool
+a `isDescendentOf` b = do
+    ((_, ds), _, _, _) <- get
+    let 
+        pes = Set.filter (\(_, c, t) -> c == a && t == DepD) ds
+        ps  = Set.toList $ Set.map (\(p, _, _) -> p) pes
+    parentsAreDescendent <- or <$> mapM (`isDescendentOf` b) ps
+    -- b being an element of ps is handled in the next call
+    return (a == b || parentsAreDescendent)
 
 
 -- addDependency adds an arc from parent to child into the state
 addDependency :: DName -> DName -> State FunctionState ()
 addDependency parent child = do
     (graph, args, counter, scope) <- get
-    -- if the parent name is actually an argument, then set the parent to be
-    -- the scope, to limit its evaluation to the current scope
-    if parent `elem` args then
-        put (addArc graph scope child, args, counter, scope)
-    else
-        put (addArc graph parent child, args, counter, scope)
+    if parent `elem` args then do
+        -- setup an arc to signify a use of an argument in this node
+        addArc ("_", child, DepArg)
+        depAlreadyExists <- child `isDescendentOf` scope
+        if depAlreadyExists
+            then return ()
+            else addArc (scope, child, DepD)
+    else do
+        depAlreadyExists <- child `isDescendentOf` parent
+        if depAlreadyExists
+            then return ()
+            else addArc (parent, child, DepD)
 
 
 -- addScopeDependency explicitly adds an arc from the current scope to the 
@@ -119,41 +138,32 @@ addDependency parent child = do
 addScopeDependency :: DName -> State FunctionState ()
 addScopeDependency child = do
     (graph, args, counter, scope) <- get
-    if hasParent graph child then
-        return ()
-    else
-        put (addArc graph scope child, args, counter, scope)
+    if hasParent graph child 
+        then return ()
+        else addArc (scope, child, DepD)
 
 
 -- addConditionalDependency sets up the dependency arcs for a conditional node,
 -- given its 'then' and 'else' scope nodes.
 addConditionalDependency :: DName -> DName -> DName -> State FunctionState ()
 addConditionalDependency c t e = do
-    ((ns, ds), args, counter, scope) <- get
-    put ((ns, (c, t, DepThen) : (c, e, DepElse) : ds)
-        , args, counter, scope)
-
-
--- addNode inserts a node with the given name into the graph.
-addNode :: DependencyGraph -> DName -> DNode -> DependencyGraph
-addNode (ns, ds) name node =
-    (Map.insert name node ns, ds)
+    addArc (c, e, DepElse)
+    addArc (c, t, DepThen)
 
 
 -- addDependencyNode inserts a node with the given name into the state.
 addDependencyNode :: DName -> DNode -> State FunctionState ()
 addDependencyNode name node = do
-    (graph, args, counter, scope) <- get
-    put (addNode graph name node, args, counter, scope)
+    ((ns, ds), args, counter, scope) <- get
+    put ((Map.insert name node ns, ds), args, counter, scope)
 
 
 -- addScope inserts a scope node into the state using the current counter,
--- increments the counter for uniqueness, then returns the generated name.
+-- then returns the generated name.
 addScope :: State FunctionState DName
 addScope = do
-    (graph, args, counter, scope) <- get
     name <- scopeName
-    put (addNode graph name Scope, args, counter + 1, scope)
+    addDependencyNode name Scope
     return name
 
 
@@ -173,11 +183,12 @@ createDependencyGraph :: [String] -> Expr -> DependencyGraph
 createDependencyGraph args defn
     = case xn of
         --Left x -> (Map.fromList [("_", Expression x)], [])
-        Left x -> (Map.fromList [("_", Scope), ("_x0", Expression x)], [("_", "_x0", DepD)])
+        Left x -> ( Map.fromList [("_", Scope), ("_x0", Expression x)]
+                  , Set.fromList [("_", "_x0", DepD)] )
         _      -> graph
     where
         (xn, (graph, _, _, _))  = runState (buildGraph defn) initState
-        initState = ((Map.fromList [("_", Scope)], []), args, 0, "_")
+        initState = ((Map.fromList [("_", Scope)], Set.empty), args, 0, "_")
 
 
 -- buildGraph recursively builds a graph from the given expression,
@@ -224,7 +235,7 @@ buildGraph e @ App{} = do
     name <- depName
     if all Either.isLeft ds then do
         -- if all arguments are atomic, then only need to add as dependent 
-        -- to the scope, so we are not lost
+        -- to the scope, so the node has a parent
         addScopeDependency name
         addDependencyNode name (Expression (DApp appName (Either.lefts ds)))
         Right <$> incrementCounter
@@ -260,21 +271,23 @@ buildGraph (Let defs e) = do
         xn
 buildGraph (If e1 e2 e3) = do
     let 
-        -- setup dependent of branches to the scope, to prevent unnecessary execution
-        --setScopeAsParent = either handleExpr addScopeDependency
+        handleBranch e = do
+            scope <- addScope
+            incrementCounter
+            oldScope <- setScope scope
+            xn <- buildGraph e
+            -- if the expression is atomic, then create a new node and set its
+            -- parent to the scope
+            -- otherwise can just set its parent to the scope
+            either handleExpr addScopeDependency xn
+            setScope oldScope
+
         handleExpr e = do
             name <- depName
             addScopeDependency name
             addDependencyNode name (Expression e)
             incrementCounter
             return ()
-
-        handleBranch e = do
-            scope <- addScope
-            oldScope <- setScope scope
-            xn <- buildGraph e
-            either handleExpr addScopeDependency xn
-            setScope oldScope
 
     cxn <- buildGraph e1
     thenScope <- handleBranch e2
@@ -304,7 +317,9 @@ type GenerationState = (DependencyGraph, GeneratedNames, ParallelisedScope)
 getChildren :: DName -> State GenerationState (Set DName)
 getChildren n = do
     ((_, ds), _, _) <- get
-    return $ Set.fromList [ c | (n', c, DepD) <- ds, n == n' ]
+    return $ 
+        Set.map (\(_, c, _) -> c) $
+        Set.filter (\(p, _, t) -> p == n && t == DepD) ds
 
 
 -- getParents returns a set of all parents of the given node, except those
@@ -312,7 +327,9 @@ getChildren n = do
 getParents :: DName -> State GenerationState (Set DName)
 getParents n = do
     ((_, ds), _, _) <- get
-    return $ Set.fromList [ p | (p, n', DepD) <- ds, n == n' ] 
+    return $ 
+        Set.map (\(p, _, _) -> p) $
+        Set.filter (\(_, c, t) -> c == n && t == DepD) ds
 
 
 -- getBranch finds the name of the node which is a branch of the given node
@@ -321,9 +338,9 @@ getParents n = do
 getBranch :: DName -> DType -> State GenerationState DName
 getBranch p t = do
     ((_, ds), _, _) <- get
-    let bs = [ c | (p', c, t') <- ds, p == p', t == t' ]
-    if length bs == 1
-        then return (head bs)
+    let bs = Set.filter (\(p', _, t') -> p == p' && t == t') ds
+    if Set.size bs == 1
+        then return $ ((\(_, c, _) -> c) . Set.elemAt 0) bs
         else error "Multiple branches with the same type or branch does not exist"
 
 
@@ -482,7 +499,7 @@ generateParallelCode name = do
 drawDependencyGraph :: String -> DependencyGraph -> IO ()
 drawDependencyGraph fileName (ns, ds) = do
     let 
-        dotGraph = G.graphElemsToDot depGraphParams (Map.toList ns) ds
+        dotGraph = G.graphElemsToDot depGraphParams (Map.toList ns) (Set.toList ds)
         dotText = G.printDotGraph dotGraph
     TL.writeFile fileName dotText
 
@@ -498,4 +515,5 @@ depGraphParams = G.defaultParams {
         DepD -> []
         DepThen -> [G.toLabel "then"]
         DepElse -> [G.toLabel "else"]
+        DepArg  -> [G.style G.dotted]
 }
