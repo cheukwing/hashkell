@@ -15,11 +15,16 @@ generateCode
     = intercalate "\n\n" . (:) header . map generateCode' . Map.toList
     where
         defnCode n args = unwords (n : args) ++ " = "
+        typeCode n      = flip (++) "\n" . (++) (n ++ " :: ") . intercalate " -> " . map show
         generateCode' :: (Name, FunctionData) -> String
         generateCode' (n, Sequential args e)
             = defnCode n args ++ show e
         generateCode' (n, Parallel args g)
             = defnCode n args ++ encodeDependencyGraph g True
+        generateCode' (n, SequentialT ts args e)
+            = typeCode n ts ++ defnCode n args ++ show e
+        generateCode' (n, ParallelT ts args g)
+            = typeCode n ts ++ defnCode n args ++ encodeDependencyGraph g True
 
 
 writeCode :: String -> Prog -> Int -> IO ()

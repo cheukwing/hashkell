@@ -4,11 +4,11 @@ import Simple.Syntax
 
 
 naiveFibProg :: Prog
-naiveFibProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), naiveFibFunc]
+naiveFibProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), Type "fib" [Int, Int], naiveFibFunc]
 
 
 naiveFibDefProg :: Prog
-naiveFibDefProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), naiveFibDefFunc]
+naiveFibDefProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), Type "fib" [Int, Int], naiveFibDefFunc]
 
 
 naiveFibFunc :: Decl

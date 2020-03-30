@@ -15,7 +15,8 @@ import Data.Either (Either)
 import qualified Data.Either as Either
 import DependencyGraph
 
-type FunctionDefn = Expr
+type Defn = Expr
+type Cplx = Expr
 
 -- TODO: support factorial
 data Complexity
@@ -26,15 +27,21 @@ data Complexity
 
 
 data InitFunctionData 
-    = JustAnnotation Expr
-    | JustDefinition [Name] FunctionDefn
-    | ComplexityAndDefinition [Name] FunctionDefn Complexity
+    = Complexity Cplx
+    | TypeAnnotation [Type]
+    | Definition [Name] Defn
+    | ComplexityType Cplx [Type]
+    | ComplexityDefinition Cplx [Name] Defn
+    | TypeDefinition [Type] [Name] Defn
+    | Complete Cplx [Type] [Name] Defn
 type InitFunctionTable = Map Name InitFunctionData
 
 type FunctionTable = Map Name FunctionData
 data FunctionData
-    = Sequential [Name] FunctionDefn
+    = Sequential [Name] Defn
+    | SequentialT [Type] [Name] Defn
     | Parallel [Name] DependencyGraph
+    | ParallelT [Type] [Name] DependencyGraph
     deriving Show
 
 
@@ -51,20 +58,40 @@ buildInitFunctionTable
         buildFunctionTable' :: InitFunctionTable -> Decl -> InitFunctionTable
         buildFunctionTable' ft (Func name args defn)
             = case Map.lookup name ft of
-                Just (JustAnnotation e) -> 
-                    Map.insert name (ComplexityAndDefinition args defn (parseComplexity args e)) ft
+                Just (Complexity c) -> 
+                    Map.insert name (ComplexityDefinition c args defn) ft
+                Just (TypeAnnotation ts) ->
+                    Map.insert name (TypeDefinition ts args defn) ft
+                Just (ComplexityType c ts) ->
+                    Map.insert name (Complete c ts args defn) ft
                 Just _                  ->
                     error $ "Duplicate definition of function " ++ name
                 Nothing                 ->
-                    Map.insert name (JustDefinition args defn) ft
-        buildFunctionTable' ft (Cplx name e)
+                    Map.insert name (Definition args defn) ft
+        buildFunctionTable' ft (Cplx name c)
             = case Map.lookup name ft of
-                Just (JustDefinition args defn) -> 
-                    Map.insert name (ComplexityAndDefinition args defn (parseComplexity args e)) ft
+                Just (TypeAnnotation ts) ->
+                    Map.insert name (ComplexityType c ts) ft
+                Just (Definition args defn) -> 
+                    Map.insert name (ComplexityDefinition c args defn) ft
+                Just (TypeDefinition ts args defn) ->
+                    Map.insert name (Complete c ts args defn) ft
                 Just _                  ->
                     error $ "Duplicate complexity annotation for function " ++ name
                 Nothing                 ->
-                    Map.insert name (JustAnnotation e) ft
+                    Map.insert name (Complexity c) ft
+        buildFunctionTable' ft (Type name ts)
+            = case Map.lookup name ft of
+                Just (Complexity c) ->
+                    Map.insert name (ComplexityType c ts) ft
+                Just (Definition args defn) -> 
+                    Map.insert name (TypeDefinition ts args defn) ft
+                Just (ComplexityDefinition c args defn) ->
+                    Map.insert name (Complete c ts args defn) ft
+                Just _                  ->
+                    error $ "Duplicate type annotation for function " ++ name
+                Nothing                 ->
+                    Map.insert name (TypeAnnotation ts) ft
 
 
 -- buildFunctionTable uses the initial function table to create the final
@@ -74,13 +101,14 @@ buildFunctionTable :: Int -> InitFunctionTable -> FunctionTable
 buildFunctionTable steps
     = Map.foldlWithKey splitFunction Map.empty
     where
+        callFunction n = foldl (\app a -> App app (Var a)) (Var n)
         splitFunction :: FunctionTable -> Name -> InitFunctionData -> FunctionTable
-        splitFunction ft name JustAnnotation{}
-            = ft
-        splitFunction ft name (JustDefinition args defn)
+        splitFunction ft name (Definition args defn)
             = Map.insert name (Sequential args defn) ft
-        splitFunction ft name (ComplexityAndDefinition args defn cplx)
-            = case complexityToBoundary cplx steps of
+        splitFunction ft name (TypeDefinition ts args defn)
+            = Map.insert name (SequentialT ts args defn) ft
+        splitFunction ft name (ComplexityDefinition c args defn)
+            = case cplxToBoundary c args steps of
                 Left False     -> 
                     Map.insert name sequential ft
                 Left True      ->
@@ -90,36 +118,97 @@ buildFunctionTable steps
                                             , (seqName, sequential)
                                             , (parName, parallel)
                                             ]) ft
-                    where
+                    where 
+                        branchingCall 
+                            = If cplxExpr (callFunction seqName args) 
+                                (callFunction parName args)
                         seqName        = name ++ "_seq"
                         parName        = name ++ "_par"
-                        callFunction n = foldl (\app a -> App app (Var a)) (Var n) args 
-                        branchingCall  = If cplxExpr (callFunction seqName) (callFunction parName)
             where
-                sequential = Sequential args defn
-                parallel   = Parallel args (createDependencyGraph args defn)
 
+
+                sequential    = Sequential args defn
+                parallel      = Parallel args (createDependencyGraph args defn)
+        splitFunction ft name (Complete c ts args defn)
+            = case cplxToBoundaryT c ts args steps of
+                Left False     -> 
+                    Map.insert name sequential ft
+                Left True      ->
+                    Map.insert name parallel ft
+                Right cplxExpr ->
+                    Map.union (Map.fromList [ (name, SequentialT ts args branchingCall)
+                                            , (seqName, sequential)
+                                            , (parName, parallel)
+                                            ]) ft
+                    where 
+                        branchingCall 
+                            = If cplxExpr (callFunction seqName args) 
+                                (callFunction parName args)
+                        seqName        = name ++ "_seq"
+                        parName        = name ++ "_par"
+            where
+                sequential    = SequentialT ts args defn
+                parallel      = ParallelT ts args (createDependencyGraph args defn)
+        splitFunction ft _ _ 
+            = ft
 
 --- HELPER FUNCTIONS ---
 
+cplxToBoundary :: Cplx -> [Name] -> Int -> Either Bool Expr
+cplxToBoundary c args
+    = complexityToBoundary (parseComplexity c args)
+
+cplxToBoundaryT :: Cplx -> [Type] -> [Name] -> Int -> Either Bool Expr
+cplxToBoundaryT c ts args steps
+    = case complexity of
+            Constant{} -> boundary
+            _          ->
+                case cplxType of
+                    Bool -> error "Time complexity annotations cannot refer to Bool names"
+                    Int  -> boundary
+    where
+        complexity = parseComplexity c args
+        name       = extractName complexity
+        cplxType   = head [t | (t, a) <- zip ts args, a == name]
+        boundary   = complexityToBoundary complexity steps
+        extractName :: Complexity -> Name
+        extractName Constant{}           = error "Trying to extract name from constant complexity"
+        extractName (Polynomial name _)  = name
+        extractName (Exponential _ name) = name
+        extractName (Logarithmic name)   = name
+
+-- complexityToBoundary takes a complexity and the step approximation to
+-- determine the boundary. It will return either a bool signifying whether or
+-- not to parallelise, or an expression to use as the condition for conditional
+-- parallelisation.
+complexityToBoundary :: Complexity -> Int -> Either Bool Expr
+complexityToBoundary (Constant n) steps
+    = Left (n > steps)
+complexityToBoundary (Polynomial name n) steps
+    = Right (Op LT (Var name) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n)))))
+complexityToBoundary (Exponential n name) steps
+    = Right (Op LT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps)))))
+complexityToBoundary (Logarithmic name) steps
+    = Right (Op LT (Var name) (Lit (LInt (2 ^ steps))))
+
 -- parseComplexity returns the complexity of an annotation if its expressions
 -- are supported and variables compatible, else throws an error
-parseComplexity :: [Name] -> Expr -> Complexity
-parseComplexity args expr
-    | fvsValid && sizeValid = parseComplexityExpression expr
+parseComplexity :: Cplx -> [Name] -> Complexity
+parseComplexity c args
+    | fvsValid && sizeValid = parseComplexityExpression c
     | not fvsValid          = error errorFvsMsg
     | otherwise             = error errorSizeMsg
     where
-        fvs          = freeVariables expr
+        fvs          = freeVariables c
         fvsValid     = Set.isSubsetOf fvs (Set.fromList args)
         sizeValid    = Set.size fvs <= 1
-        errorFvsMsg  = "The time complexity annotation " ++ show expr ++ " is incompatible with the function definition"
-        errorSizeMsg = "The time complexity annotation " ++ show expr ++ " is unsupported as it contains more than 1 name"
+        errorFvsMsg  = "The time complexity annotation " ++ show c ++ " is incompatible with the function definition"
+        errorSizeMsg = "The time complexity annotation " ++ show c ++ " is unsupported as it contains more than 1 name"
 
 
 -- parseComplexityExpression parses the annotation and returns its associated
 -- complexity if it is supported, else throws an error
-parseComplexityExpression :: Expr -> Complexity
+parseComplexityExpression :: Cplx -> Complexity
 parseComplexityExpression If{} 
     = error "Cannot use 'if' in a time complexity annotation"
 parseComplexityExpression Let{} 
@@ -159,18 +248,3 @@ freeVariables Lit{}
     = Set.empty
 freeVariables (Op _ e1 e2)
     = Set.union (freeVariables e1) (freeVariables e2)
-
-
--- complexityToBoundary takes a complexity and the step approximation to
--- determine the boundary. It will return either a bool signifying whether or
--- not to parallelise, or an expression to use as the condition for conditional
--- parallelisation.
-complexityToBoundary :: Complexity -> Int -> Either Bool Expr
-complexityToBoundary (Constant n) steps
-    = Left (n > steps)
-complexityToBoundary (Polynomial name n) steps
-    = Right (Op LT (Var name) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n)))))
-complexityToBoundary (Exponential n name) steps
-    = Right (Op LT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps)))))
-complexityToBoundary (Logarithmic name) steps
-    = Right (Op LT (Var name) (Lit (LInt (2 ^ steps))))
