@@ -7,9 +7,12 @@ import DependencyGraph
 import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
 
+header = "import Control.Parallel\nimport Control.Parallel.Strategies"
+
+
 generateCode :: FunctionTable -> String
 generateCode
-    = intercalate "\n\n" . map generateCode' . Map.toList
+    = intercalate "\n\n" . (:) header . map generateCode' . Map.toList
     where
         defnCode n args = unwords (n : args) ++ " = "
         generateCode' :: (Name, FunctionData) -> String
