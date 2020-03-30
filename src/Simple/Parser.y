@@ -16,6 +16,10 @@ import Control.Monad.Except
 
 %token
     '##'  { TokenComplexity }
+    '::'  { TokenType }
+    Int   { TokenInt }
+    Bool  { TokenBool}
+    '->'  { TokenArrow }
     if    { TokenIf }
     then  { TokenThen }
     else  { TokenElse }
@@ -62,9 +66,16 @@ Prog : {- empty -}                 { [] }
 
 Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
      | VAR '##' Expr               { Cplx $1 $3 }
+     | VAR '::' Type               { Type $1 $3 }
 
 Args : {- empty -}                 { [] }
      | VAR Args                    { $1 : $2 }
+
+Type : T                           { [ $1 ] }
+     | T '->' Type                 { $1 : $3 }
+
+T    : Int                         { Int }
+     | Bool                        { Bool }
 
 Expr : if Expr then Expr else Expr { If $2 $4 $6 }
      | let '{' Defs '}' in Expr    { Let $3 $6 }     

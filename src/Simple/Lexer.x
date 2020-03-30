@@ -26,6 +26,11 @@ tokens :-
     "--".*                        ;
 
     "##"                          { \s -> TokenComplexity }
+    "::"                          { \s -> TokenType }
+
+    "Int"                         { \s -> TokenInt }
+    "Bool"                        { \s -> TokenBool }
+    "->"                          { \s -> TokenArrow }
 
     if                            { \s -> TokenIf }
     then                          { \s -> TokenThen }
@@ -37,6 +42,7 @@ tokens :-
     $digit+                       { \s -> TokenNum (read s) }
     $lower [$alpha $digit \_ \']* { \s -> TokenSym s }
     "="                           { \s -> TokenDef }
+
     "=="                          { \s -> TokenEQ }
     "<"                           { \s -> TokenLT }
     ">"                           { \s -> TokenGT }
@@ -49,6 +55,7 @@ tokens :-
     [\*]                          { \s -> TokenMul }
     [\/]                          { \s -> TokenDiv }
     [\^]                          { \s -> TokenExp}
+
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
     \{                            { \s -> TokenLBrace }
@@ -58,6 +65,10 @@ tokens :-
 {
 data Token
     = TokenComplexity
+    | TokenType
+    | TokenInt
+    | TokenBool
+    | TokenArrow
     | TokenIf
     | TokenThen
     | TokenElse

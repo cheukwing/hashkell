@@ -10,7 +10,17 @@ type Prog = [Decl]
 data Decl
     = Func Name [Name] Expr
     | Cplx Name Expr
+    | Type Name [Type]
     deriving (Eq, Show)
+
+data Type
+    = Int
+    | Bool
+    deriving Eq
+
+instance Show Type where
+    show Int  = "Int"
+    show Bool = "Bool"
 
 data Expr
     = If Expr Expr Expr
@@ -24,9 +34,9 @@ data Expr
 instance Show Expr where
     show (If e1 e2 e3) = "if " ++ show e1 ++ " then " ++ show e2 ++ " else " ++ show e3
     show (Let ds e)    = "let " ++ intercalate ";" (map show ds) ++ " in " ++ show e
-    show (App e1 e2) = show e1 ++ " " ++ show e2
-    show (Var n) = n
-    show (Lit l) = show l
+    show (App e1 e2)   = show e1 ++ " " ++ show e2
+    show (Var n)       = n
+    show (Lit l)       = show l
     show (Op op e1 e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
 
 data Def
