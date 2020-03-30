@@ -98,12 +98,15 @@ hasParent (_, ds) name =
     not $ null $ Set.filter (\(_, c, t) -> c == name && t == DepD) ds
 
 
+-- addArc inserts a dependency arc into the state
 addArc :: Dependency -> State FunctionState ()
 addArc d = do
     ((ns, ds), args, counter, scope) <- get
     put ((ns, Set.insert d ds), args, counter, scope)
 
 
+-- isDescendentOf checks if a is a descendent of b by recursively checking
+-- a's parents for b
 isDescendentOf :: DName -> DName -> State FunctionState Bool
 a `isDescendentOf` b = do
     ((_, ds), _, _, _) <- get
@@ -116,6 +119,8 @@ a `isDescendentOf` b = do
 
 
 -- addDependency adds an arc from parent to child into the state
+-- TODO: If a->b and c = a + b, then we should only have one dependency
+-- from b->c, instead of a->c and b->c
 addDependency :: DName -> DName -> State FunctionState ()
 addDependency parent child = do
     (graph, args, counter, scope) <- get
