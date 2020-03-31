@@ -263,19 +263,6 @@ buildGraph (Let defs e) = do
             addDependencyNode defName (Expression v)
     mapM_ defToGraph defs
     buildGraph e
-    {-
-    xn <- buildGraph e
-    -- if expression is atomic, return as atomic
-    -- otherwise, add setup dependencies as normal
-    name <- depName
-    either
-        (return . Left)
-        (\n -> do
-            addDependency n name
-            addDependencyNode name (Expression (DVar n))
-            Right <$> incrementCounter)
-        xn
-    -}
 buildGraph (If e1 e2 e3) = do
     let 
         handleBranch e = do
