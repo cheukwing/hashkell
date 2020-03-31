@@ -20,6 +20,7 @@ data Complexity
     | Polynomial Name Int
     | Exponential Int Name
     | Logarithmic Name
+    deriving (Eq, Show)
 
 
 data InitFunctionData 
@@ -173,6 +174,7 @@ cplxToBoundaryT c ts args steps
         extractName (Polynomial name _)  = name
         extractName (Exponential _ name) = name
         extractName (Logarithmic name)   = name
+
 
 -- complexityToBoundary takes a complexity and the step approximation to
 -- determine the boundary. It will return either a bool signifying whether or

@@ -1,5 +1,5 @@
 import Simple.Parser (parseProg)
-import Simple.Syntax
+import Simple.Syntax as Syntax
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -43,6 +43,12 @@ parseProgTests = testGroup "parseProg tests"
     , testCase "parses arguments" $
         parseProg "foobar a b c = a;" @?=
             Right [Func "foobar" ["a", "b", "c"] (Var "a")]
+    , testCase "parses complexity" $
+        parseProg "foobar ## n;" @?=
+            Right [Cplx "foobar" (Var "n")]
+    , testCase "parses types" $
+        parseProg  "foobar :: Int -> Int;" @?=
+            Right [Type "foobar" [Int, Int]]
     ]
 
 
