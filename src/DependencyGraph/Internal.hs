@@ -185,7 +185,11 @@ createDependencyGraph args defn
         --Left x -> (Map.fromList [("_", Expression x)], [])
         Left x -> ( Map.fromList [("_", Scope), ("_x0", Expression x)]
                   , Set.fromList [("_", "_x0", DepD)] )
-        _      -> graph
+        Right n ->
+            if n `elem` args
+                then ( Map.fromList [("_", Scope), ("_x0", Expression (DVar n))]
+                     , Set.fromList [("_", "_x0", DepD), ("_", "_x0", DepArg)])
+                else graph
     where
         (xn, (graph, _, _, _))  = runState (buildGraph defn) initState
         initState = ((Map.fromList [("_", Scope)], Set.empty), args, 0, "_")
@@ -229,7 +233,7 @@ buildGraph e @ App{} = do
         appArgs (App (Var name) e)
           = (name, [e])
         appArgs (App e1 e2)
-          = (name, e2 : es)
+          = (name, es ++ [e2])
           where (name, es) = appArgs e1
     ds <- mapM buildGraph args
     name <- depName
@@ -258,6 +262,8 @@ buildGraph (Let defs e) = do
             v <- addDependencyIfName xn
             addDependencyNode defName (Expression v)
     mapM_ defToGraph defs
+    buildGraph e
+    {-
     xn <- buildGraph e
     -- if expression is atomic, return as atomic
     -- otherwise, add setup dependencies as normal
@@ -269,6 +275,7 @@ buildGraph (Let defs e) = do
             addDependencyNode name (Expression (DVar n))
             Right <$> incrementCounter)
         xn
+    -}
 buildGraph (If e1 e2 e3) = do
     let 
         handleBranch e = do

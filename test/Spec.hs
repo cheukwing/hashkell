@@ -8,10 +8,12 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import ParallelizerTests
+import DependencyGraphTests
 
 main = defaultMain $ testGroup "Tests" 
         [ parserTests
         , parallelizerTests
+        , dependencyGraphTests
         ]
 
 parserTests :: TestTree

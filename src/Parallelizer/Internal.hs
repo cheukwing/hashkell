@@ -50,14 +50,20 @@ data ParallelizerError
     | UnsupportedComplexityAnnotation
     | IncompatibleComplexityAnnotation
     | DuplicateDeclaration
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show ParallelizerError where
+    show IllegalComplexityAnnotation = "Illegal expressions in complexity annotation"
+    show UnsupportedComplexityAnnotation = "Unsupported expressions in complexity annotation"
+    show IncompatibleComplexityAnnotation = "Complexity annotation is incompatible with other function information"
+    show DuplicateDeclaration = "Duplicate declaration of function information"
 
 type Parallelizer a = Either ParallelizerError a
 
 createFunctionTable :: Prog -> Int -> FunctionTable
 createFunctionTable prog steps
     = case cft of
-        Left err -> error "todo show errors"
+        Left err -> error (show err)
         Right ft -> ft
     where
         cft = buildInitFunctionTable prog >>= buildFunctionTable steps

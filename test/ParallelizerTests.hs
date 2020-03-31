@@ -12,14 +12,13 @@ import Parallelizer.Internal
     , InitFunctionData(..)
     , FunctionData(..)
     )
-import DependencyGraph.Internal ( DNode(..), DType(..), DExpr(..))
+import DependencyGraph.Internal (DNode(..), DType(..), DExpr(..))
 import Simple.Syntax
 
 import Prelude hiding (GT, LT, EQ)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
-import Control.Exception (try)
-import Data.Either (Either(..), either)
+import Data.Either (Either(..))
 
 import Test.Tasty
 import Test.Tasty.HUnit
