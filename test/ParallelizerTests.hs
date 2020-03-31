@@ -227,4 +227,32 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         , ("bar_seq", Sequential ["n"] basicFuncDefn)
         , ("bar_par", Parallel ["n"] basicFuncGraph)
         ])
+    , testCase "fails when complexity is incompatible with function" $
+        buildFunctionTable 100 (Map.fromList
+        [ ("foo", Complete (Op Exp (Var "n") (Lit (LInt 2))) [Int, Int] ["m"] basicFuncDefn)
+        ])
+        @?= Left IncompatibleComplexityAnnotation
+    , testCase "fails when complexity is incompatible with types" $
+        buildFunctionTable 100 (Map.fromList
+        [ ("foo", Complete (Op Exp (Var "n") (Lit (LInt 2))) [Bool, Int] ["n"] basicFuncDefn)
+        ])
+        @?= Left IncompatibleComplexityAnnotation
+    , testCase "fails when complexity is uses illegal expressions" $
+        buildFunctionTable 100 (Map.fromList
+        [ ("foo", Complete 
+            (If (Lit (LBool True)) (Var "n") (Op Exp (Var "n") (Lit (LInt 2))))
+            [Int, Int] 
+            ["n"] 
+            basicFuncDefn)
+        ])
+        @?= Left IllegalComplexityAnnotation
+    , testCase "fails when complexity is uses unsupported expressions" $
+        buildFunctionTable 100 (Map.fromList
+        [ ("foo", Complete 
+            (Op Add (Var "n") (Var "m"))
+            [Int, Int, Int] 
+            ["n", "m"] 
+            basicFuncDefn)
+        ])
+        @?= Left UnsupportedComplexityAnnotation
     ]
