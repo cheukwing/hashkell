@@ -63,7 +63,7 @@ createFunctionTable prog steps
         cft = buildInitFunctionTable prog >>= buildFunctionTable steps
 
 -- buildInitFunctionTable builds the initial function table by aggregating
--- and checking compatibility of each function's parsed declarations.
+-- each function's parsed declarations.
 buildInitFunctionTable :: Prog -> Parallelizer InitFunctionTable
 buildInitFunctionTable 
     = foldM buildFunctionTable' Map.empty
@@ -156,6 +156,7 @@ buildFunctionTable steps
 
 --- HELPER FUNCTIONS ---
 
+-- getNameType gets the type of the name in the complexity
 getNameType :: [Type] -> [Name] -> Complexity -> Type
 getNameType ts args cplx
     = head [t | (t, a) <- zip ts args, a == name]
@@ -163,6 +164,8 @@ getNameType ts args cplx
         name = extractComplexityName cplx
 
 
+-- fromTrivialShouldParallelise returns true if the trivial boundary dictates
+-- that the parallelised version will always be run
 fromTrivialShouldParallelise :: Expr -> Bool
 fromTrivialShouldParallelise (Lit (LBool t)) 
     = not t
@@ -170,11 +173,14 @@ fromTrivialShouldParallelise _
     = error "Not a trivial boundary"
 
 
+-- isTrivialBoundary returns true if the boundary is just a bool
 isTrivialBoundary :: Expr -> Bool
 isTrivialBoundary (Lit LBool{}) = True
 isTrivialBoundary _             = False
 
 
+-- validateComplexityNames checks that the complexity's name is part of the
+-- function's arguments
 validateComplexityNames :: Complexity -> [Name] -> Parallelizer ()
 validateComplexityNames Constant{} _ 
     = return ()
@@ -183,20 +189,22 @@ validateComplexityNames c args =
         then return ()
         else throwError IncompatibleComplexityAnnotation
 
+
+-- extractComplexityName gets the name from the complexity,
+-- undefined for Constants
 extractComplexityName :: Complexity -> Name
 extractComplexityName (Polynomial name _)  = name
 extractComplexityName (Exponential _ name) = name
 extractComplexityName (Logarithmic name)   = name
 
 
--- complexityToBoundary takes a complexity and the step approximation to
--- determine the boundary. It will return either a bool signifying whether or
--- not to run in sequential, or an expression to use as the condition for conditional
--- parallelisation.
+-- complexityToBoundary takes a complexity, the type of the name, and the step
+-- approximation to determine the boundary. 
 complexityToBoundary :: Complexity -> Type -> Int -> Parallelizer Expr
 complexityToBoundary (Constant n) _ steps
     = return $ Lit (LBool (n < steps))
 complexityToBoundary _ Bool _ 
+    -- Cannot create a boundary if the name refers to a bool
     = throwError IncompatibleComplexityAnnotation
 complexityToBoundary c Int steps
     = return $ case c of
