@@ -1,4 +1,4 @@
--- Adapted from Write You A Haskell
+
 module Simple.Syntax where
 
 import Data.List (intercalate)
