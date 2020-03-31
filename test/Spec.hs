@@ -1,6 +1,5 @@
 import Simple.Parser (parseProg)
 import Simple.Syntax
-import Parallelizer (buildFunctionTable, isValidComplexity, freeVariables)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -8,20 +7,22 @@ import qualified Data.Set as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import ParallelizerTests
+
 basicFunctionDefn = Op Add (Lit (LInt 1)) (Lit (LInt 1))
 
-main = defaultMain tests
+main = defaultMain $ testGroup "Tests" 
+        [ parserTests
+        , parallelizerTests
+        ]
 
-tests :: TestTree
-tests = testGroup "Tests" 
-            [ parserTests
-            , buildFunctionTableTests
-            , isValidComplexityTests
-            , freeVariablesTests
+parserTests :: TestTree
+parserTests = testGroup "Parser Tests" 
+            [ parseProgTests
             ]
 
 
-parserTests = testGroup "Parser tests"
+parseProgTests = testGroup "parseProg tests"
     [ testCase "parses simple function" $
         parseProg "a = 1;" @?= 
             Right [Func  "a" [] (Lit (LInt 1))]
@@ -100,15 +101,3 @@ isValidComplexityTests = testGroup "isValidComplexity tests"
         isValidComplexity (App (Var "bungletron") (Var "n")) @?= False
     ]
 -}
-
-freeVariablesTests = testGroup "freeVariables tests"
-    [ testCase "finds free variables from operation" $
-        freeVariables (Op Add (Op Mul (Var "b") (Var "c")) (Var "d"))
-            @?= Set.fromList ["b", "c", "d"]
-    , testCase "finds free variables from application" $
-        freeVariables (App (App (Var "bungletron") (Var "bungletronics")) (Lit (LInt 10)))
-            @?= Set.fromList ["bungletron", "bungletronics"]
-    , testCase "bound variables are not included" $
-        freeVariables (Let [Def "a" (Lit (LInt 1)), Def "b" (Lit (LInt 2))] (Op Mul (Op Mul (Var "a") (Var "b")) (Var "c")))
-            @?= Set.singleton "c"
-    ]
