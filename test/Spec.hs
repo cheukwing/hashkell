@@ -9,8 +9,6 @@ import Test.Tasty.HUnit
 
 import ParallelizerTests
 
-basicFunctionDefn = Op Add (Lit (LInt 1)) (Lit (LInt 1))
-
 main = defaultMain $ testGroup "Tests" 
         [ parserTests
         , parallelizerTests
