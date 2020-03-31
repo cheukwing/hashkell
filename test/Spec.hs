@@ -45,6 +45,7 @@ parserTests = testGroup "Parser tests"
     ]
 
 
+{-
 buildFunctionTableTests = testGroup "buildFunctionTable tests" 
     [ testCase "creates entry for just function" $
         buildFunctionTable [Func "bunglebionics" ["n"] basicFunctionDefn]
@@ -98,6 +99,7 @@ isValidComplexityTests = testGroup "isValidComplexity tests"
     , testCase "invalidates non-log applications" $
         isValidComplexity (App (Var "bungletron") (Var "n")) @?= False
     ]
+-}
 
 freeVariablesTests = testGroup "freeVariables tests"
     [ testCase "finds free variables from operation" $
