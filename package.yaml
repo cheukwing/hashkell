@@ -29,6 +29,7 @@ dependencies:
   - containers >= 0.6.0.1
   - graphviz
   - text
+  - filepath
 
 library:
   source-dirs: src

@@ -60,8 +60,8 @@ instance Show ParallelizerError where
 
 type Parallelizer a = Either ParallelizerError a
 
-createFunctionTable :: Prog -> Int -> FunctionTable
-createFunctionTable prog steps
+createFunctionTable :: Int -> Prog -> FunctionTable
+createFunctionTable steps prog
     = case cft of
         Left err -> error (show err)
         Right ft -> ft

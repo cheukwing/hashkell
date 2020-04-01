@@ -3,9 +3,11 @@ module CodeGenerator where
 import Parallelizer
 import Simple.Syntax
 import DependencyGraph
+import Simple.Parser (parseProg)
 
 import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
+import Data.Either (either)
 
 header = "import Control.Parallel\nimport Control.Parallel.Strategies"
 
@@ -27,14 +29,14 @@ generateCode
             = typeCode n ts ++ defnCode n args ++ encodeDependencyGraph g True
 
 
-writeCode :: String -> Prog -> Int -> IO ()
-writeCode fileName prog steps =
-    writeFile fileName $ generateCode $ createFunctionTable prog steps
+writeCode :: String -> Int -> Prog -> IO ()
+writeCode fileName steps prog =
+    writeFile fileName $ generateCode $ createFunctionTable steps prog
 
 
 drawGraphs :: Prog -> IO ()
 drawGraphs prog
     = mapM_ (uncurry drawDependencyGraph) ngs
     where 
-        ftMap = Map.toList (createFunctionTable prog 0)
-        ngs   = [(n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
+        ftMap = Map.toList (createFunctionTable 0 prog)
+        ngs   = [("./out/graphs" ++ n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
