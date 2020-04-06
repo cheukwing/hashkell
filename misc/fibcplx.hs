@@ -1,5 +1,4 @@
-fib ## 2^n;
-fib :: Int -> Int;
+fib ## 2^n; fib :: Int -> Int;
 fib n = 
     if n == 0
         then 1

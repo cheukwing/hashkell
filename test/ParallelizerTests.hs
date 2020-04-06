@@ -132,19 +132,19 @@ validateComplexityNamesTests = testGroup "validateComplexityNames tests"
 buildInitFunctionTableTests = testGroup "buildInitFunctionTable tests"
     [ testCase "forms complete when given cplx, type, func" $
         buildInitFunctionTable [basicCplxDecl, basicTypeDecl, basicFuncDecl]
-            @?= Right (Map.fromList [("foo", Complete (Var "n") [Int, Int] ["n"] basicFuncDefn)])
+            @?= Right (Map.fromList [("foo", Complete (Polynomial "n" 1) [Int, Int] ["n"] basicFuncDefn)])
     , testCase "forms complete when given type, cplx, func" $
         buildInitFunctionTable [basicTypeDecl, basicCplxDecl, basicFuncDecl]
-            @?= Right (Map.fromList [("foo", Complete (Var "n") [Int, Int] ["n"] basicFuncDefn)])
+            @?= Right (Map.fromList [("foo", Complete (Polynomial "n" 1) [Int, Int] ["n"] basicFuncDefn)])
     , testCase "forms complete when given func, cplx, type" $
         buildInitFunctionTable [basicFuncDecl, basicCplxDecl, basicTypeDecl]
-            @?= Right (Map.fromList [("foo", Complete (Var "n") [Int, Int] ["n"] basicFuncDefn)])
+            @?= Right (Map.fromList [("foo", Complete (Polynomial "n" 1) [Int, Int] ["n"] basicFuncDefn)])
     , testCase "forms partial when given func, type" $
         buildInitFunctionTable [basicFuncDecl, basicTypeDecl]
             @?= Right (Map.fromList [("foo", TypeDefinition [Int, Int] ["n"] basicFuncDefn)])
     , testCase "forms partial when given cplx, type" $
         buildInitFunctionTable [basicCplxDecl, basicTypeDecl]
-            @?= Right (Map.fromList [("foo", ComplexityType (Var "n") [Int, Int])])
+            @?= Right (Map.fromList [("foo", ComplexityType (Polynomial "n" 1) [Int, Int])])
     , testCase "forms only func when given func" $
         buildInitFunctionTable [basicFuncDecl]
             @?= Right (Map.fromList [("foo", Definition ["n"] basicFuncDefn)])
@@ -162,17 +162,23 @@ buildInitFunctionTableTests = testGroup "buildInitFunctionTable tests"
             , Cplx "baz" (Op Exp (Lit (LInt 2)) (Var "q"))
             ]
             @?= Right (Map.fromList
-                [ ("foo", Complete (Var "n") [Int, Int] ["n"] basicFuncDefn)
-                , ("bar", ComplexityType (Var "m") [Bool, Int])
-                , ("baz", ComplexityDefinition (Op Exp (Lit (LInt 2)) (Var "q")) ["n"] basicFuncDefn)
+                [ ("foo", Complete (Polynomial "n" 1) [Int, Int] ["n"] basicFuncDefn)
+                , ("bar", ComplexityType (Polynomial "m" 1) [Bool, Int])
+                , ("baz", ComplexityDefinition (Exponential 2 "q") ["n"] basicFuncDefn)
                 ])
+    , testCase "fails when complexity is uses illegal expressions" $
+        buildInitFunctionTable [Cplx "foo" (If (Lit (LBool True)) (Var "n") (Op Exp (Var "n") (Lit (LInt 2))))]
+        @?= Left IllegalComplexityAnnotation
+    , testCase "fails when complexity is uses unsupported expressions" $
+        buildInitFunctionTable [Cplx "foo" (Op Add (Var "n") (Var "m")) ]
+        @?= Left UnsupportedComplexityAnnotation
     ]
 
 buildFunctionTableTests = testGroup "buildFunctionTable tests"
     [ testCase "ignores functions without definitions" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complexity (Var "m"))
-        , ("bar", ComplexityType (Var "q") [Int, Int])
+        [ ("foo", Complexity (Polynomial "m" 1))
+        , ("bar", ComplexityType (Polynomial "q" 1) [Int, Int])
         , ("baz", TypeAnnotation [Bool, Int, Int, Int, Int, Int])
         ])
         @?= Right Map.empty
@@ -187,9 +193,9 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
     , testCase "does not parallelise functions with low trivial complexity" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Lit (LInt 50)) [Int, Int] ["n"] basicFuncDefn)
-        , ("bar", ComplexityDefinition (Lit (LInt 99)) ["n"] basicFuncDefn)
-        , ("baz", ComplexityDefinition (App (Var "log") (Var "n")) ["n"] basicFuncDefn)
+        [ ("foo", Complete (Constant 50) [Int, Int] ["n"] basicFuncDefn)
+        , ("bar", ComplexityDefinition (Constant 99) ["n"] basicFuncDefn)
+        , ("baz", ComplexityDefinition (Logarithmic "n") ["n"] basicFuncDefn)
         ])
         @?= Right (Map.fromList 
         [ ("foo", SequentialT [Int, Int] ["n"] basicFuncDefn)
@@ -198,8 +204,8 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
     , testCase "exclusively parallelises functions with high trivial complexity" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Lit (LInt 100)) [Int, Int] ["n"] basicFuncDefn)
-        , ("bar", ComplexityDefinition (Lit (LInt 10000000)) ["n"] basicFuncDefn)
+        [ ("foo", Complete (Constant 100) [Int, Int] ["n"] basicFuncDefn)
+        , ("bar", ComplexityDefinition (Constant 10000000) ["n"] basicFuncDefn)
         ])
         @?= Right (Map.fromList 
         [ ("foo", ParallelT [Int, Int] ["n"] basicFuncGraph)
@@ -207,8 +213,8 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
     , testCase "parallelise functions with polynomial complexity" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Op Exp (Var "n") (Lit (LInt 2))) [Int, Int] ["n"] basicFuncDefn)
-        , ("bar", ComplexityDefinition (Var "n") ["n"] basicFuncDefn)
+        [ ("foo", Complete (Polynomial "n" 2) [Int, Int] ["n"] basicFuncDefn)
+        , ("bar", ComplexityDefinition (Polynomial "n" 1) ["n"] basicFuncDefn)
         ])
         @?= Right (Map.fromList 
         [ ("foo", SequentialT [Int, Int] ["n"] 
@@ -228,30 +234,12 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
     , testCase "fails when complexity is incompatible with function" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Op Exp (Var "n") (Lit (LInt 2))) [Int, Int] ["m"] basicFuncDefn)
+        [ ("foo", Complete (Polynomial "n" 2) [Int, Int] ["m"] basicFuncDefn)
         ])
         @?= Left IncompatibleComplexityAnnotation
     , testCase "fails when complexity is incompatible with types" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Op Exp (Var "n") (Lit (LInt 2))) [Bool, Int] ["n"] basicFuncDefn)
+        [ ("foo", Complete (Polynomial "n" 2) [Bool, Int] ["n"] basicFuncDefn)
         ])
         @?= Left IncompatibleComplexityAnnotation
-    , testCase "fails when complexity is uses illegal expressions" $
-        buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete 
-            (If (Lit (LBool True)) (Var "n") (Op Exp (Var "n") (Lit (LInt 2))))
-            [Int, Int] 
-            ["n"] 
-            basicFuncDefn)
-        ])
-        @?= Left IllegalComplexityAnnotation
-    , testCase "fails when complexity is uses unsupported expressions" $
-        buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete 
-            (Op Add (Var "n") (Var "m"))
-            [Int, Int, Int] 
-            ["n", "m"] 
-            basicFuncDefn)
-        ])
-        @?= Left UnsupportedComplexityAnnotation
     ]

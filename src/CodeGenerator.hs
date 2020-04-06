@@ -9,6 +9,8 @@ import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
 import Data.Either (either)
 
+import Debug.Trace
+
 header = "import Control.Parallel\nimport Control.Parallel.Strategies"
 
 
@@ -39,4 +41,5 @@ drawGraphs prog
     = mapM_ (uncurry drawDependencyGraph) ngs
     where 
         ftMap = Map.toList (createFunctionTable 0 prog)
-        ngs   = [("./out/graphs" ++ n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
+        ngs   = [("./out/g_" ++ n ++ ".dot", g) | (n, Parallel _ g) <- ftMap]
+                ++ [("./out/g_" ++ n ++ ".dot", g) | (n, ParallelT _ _ g) <- ftMap]

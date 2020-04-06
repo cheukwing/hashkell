@@ -26,13 +26,13 @@ data Complexity
 
 
 data InitFunctionData 
-    = Complexity Cplx
+    = Complexity Complexity
     | TypeAnnotation [Type]
     | Definition [Name] Defn
-    | ComplexityType Cplx [Type]
-    | ComplexityDefinition Cplx [Name] Defn
+    | ComplexityType Complexity [Type]
+    | ComplexityDefinition Complexity [Name] Defn
     | TypeDefinition [Type] [Name] Defn
-    | Complete Cplx [Type] [Name] Defn
+    | Complete Complexity [Type] [Name] Defn
     deriving (Eq, Show)
 
 type InitFunctionTable = Map Name InitFunctionData
@@ -88,17 +88,19 @@ buildInitFunctionTable
                 Nothing                 ->
                     return $ Map.insert name (Definition args defn) ft
         buildFunctionTable' ft (Cplx name c)
-            = case Map.lookup name ft of
-                Just (TypeAnnotation ts) ->
-                    return $ Map.insert name (ComplexityType c ts) ft
-                Just (Definition args defn) -> 
-                    return $ Map.insert name (ComplexityDefinition c args defn) ft
-                Just (TypeDefinition ts args defn) ->
-                    return $ Map.insert name (Complete c ts args defn) ft
-                Just _                  ->
-                    throwError DuplicateDeclaration
-                Nothing                 ->
-                    return $ Map.insert name (Complexity c) ft
+            = do
+                cplx <- parseComplexity c
+                case Map.lookup name ft of
+                    Just (TypeAnnotation ts) ->
+                        return $ Map.insert name (ComplexityType cplx ts) ft
+                    Just (Definition args defn) -> 
+                        return $ Map.insert name (ComplexityDefinition cplx args defn) ft
+                    Just (TypeDefinition ts args defn) ->
+                        return $ Map.insert name (Complete cplx ts args defn) ft
+                    Just _                  ->
+                        throwError DuplicateDeclaration
+                    Nothing                 ->
+                        return $ Map.insert name (Complexity cplx) ft
         buildFunctionTable' ft (Type name ts)
             = case Map.lookup name ft of
                 Just (Complexity c) ->
@@ -126,8 +128,7 @@ buildFunctionTable steps
             = return $ Map.insert name (Sequential args defn) ft
         splitFunction ft name (TypeDefinition ts args defn)
             = return $ Map.insert name (SequentialT ts args defn) ft
-        splitFunction ft name (ComplexityDefinition c args defn) = do
-            cplx <- parseComplexity c
+        splitFunction ft name (ComplexityDefinition cplx args defn) = do
             validateComplexityNames cplx args
             boundary <- complexityToBoundary cplx Int steps
             let
@@ -140,8 +141,7 @@ buildFunctionTable steps
                 (True, True)  -> return $ Map.insert name parallel ft
                 (True, False) -> return $ Map.insert name sequential ft
                 _             -> return $ Map.union (Map.fromList [ branch, s, p ]) ft
-        splitFunction ft name (Complete c ts args defn) = do
-            cplx <- parseComplexity c
+        splitFunction ft name (Complete cplx ts args defn) = do
             validateComplexityNames cplx args
             let t = case cplx of
                         Constant{} -> Int
