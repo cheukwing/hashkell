@@ -14,10 +14,9 @@ import Control.Monad.Except (throwError, foldM)
 
 
 type Defn = Expr
-type Cplx = Expr
 
 -- TODO: support factorial
-data Complexity
+data Cplx
     = Constant Int
     | Polynomial Name Int
     | Exponential Int Name
@@ -26,13 +25,13 @@ data Complexity
 
 
 data InitFunctionData 
-    = Complexity Complexity
+    = Complexity Cplx
     | TypeAnnotation [Type]
     | Definition [Name] Defn
-    | ComplexityType Complexity [Type]
-    | ComplexityDefinition Complexity [Name] Defn
+    | ComplexityType Cplx [Type]
+    | ComplexityDefinition Cplx [Name] Defn
     | TypeDefinition [Type] [Name] Defn
-    | Complete Complexity [Type] [Name] Defn
+    | Complete Cplx [Type] [Name] Defn
     deriving (Eq, Show)
 
 type InitFunctionTable = Map Name InitFunctionData
@@ -163,7 +162,7 @@ buildFunctionTable steps
 --- HELPER FUNCTIONS ---
 
 -- getNameType gets the type of the name in the complexity
-getNameType :: [Type] -> [Name] -> Complexity -> Type
+getNameType :: [Type] -> [Name] -> Cplx -> Type
 getNameType ts args cplx
     = head [t | (t, a) <- zip ts args, a == name]
     where
@@ -187,7 +186,7 @@ isTrivialBoundary _             = False
 
 -- validateComplexityNames checks that the complexity's name is part of the
 -- function's arguments
-validateComplexityNames :: Complexity -> [Name] -> Parallelizer ()
+validateComplexityNames :: Cplx -> [Name] -> Parallelizer ()
 validateComplexityNames Constant{} _ 
     = return ()
 validateComplexityNames c args =
@@ -198,7 +197,7 @@ validateComplexityNames c args =
 
 -- extractComplexityName gets the name from the complexity,
 -- undefined for Constants
-extractComplexityName :: Complexity -> Name
+extractComplexityName :: Cplx -> Name
 extractComplexityName (Polynomial name _)  = name
 extractComplexityName (Exponential _ name) = name
 extractComplexityName (Logarithmic name)   = name
@@ -206,7 +205,7 @@ extractComplexityName (Logarithmic name)   = name
 
 -- complexityToBoundary takes a complexity, the type of the name, and the step
 -- approximation to determine the boundary. 
-complexityToBoundary :: Complexity -> Type -> Int -> Parallelizer Expr
+complexityToBoundary :: Cplx -> Type -> Int -> Parallelizer Expr
 complexityToBoundary (Constant n) _ steps
     = return $ Lit (LBool (n < steps))
 complexityToBoundary _ Bool _ 
@@ -226,7 +225,7 @@ complexityToBoundary c Int steps
 
 -- parseComplexityExpression parses the annotation and returns its associated
 -- complexity if it is supported, else throws an error
-parseComplexity :: Cplx -> Parallelizer Complexity
+parseComplexity :: Expr -> Parallelizer Cplx
 parseComplexity If{}
     = throwError IllegalComplexityAnnotation
 parseComplexity Let{} 

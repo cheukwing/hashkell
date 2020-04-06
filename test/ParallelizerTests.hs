@@ -8,7 +8,7 @@ import Parallelizer.Internal
     , buildInitFunctionTable
     , buildFunctionTable
     , ParallelizerError(..)
-    , Complexity(..)
+    , Cplx(..)
     , InitFunctionData(..)
     , FunctionData(..)
     )
