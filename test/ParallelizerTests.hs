@@ -105,16 +105,16 @@ complexityToBoundaryTests = testGroup "complexityToBoundary tests"
             @?= Right (Lit (LBool False))
     , testCase "creates boundary for linear time" $
         complexityToBoundary (Polynomial "n" 1) Int 100
-            @?= Right (Op LT (Var "n") (Lit (LInt 100)))
+            @?= Right (Op GT (Var "n") (Lit (LInt 100)))
     , testCase "creates boundary for quadratic time" $
         complexityToBoundary (Polynomial "n" 2) Int 100
-            @?= Right (Op LT (Var "n") (Lit (LInt 10)))
+            @?= Right (Op GT (Var "n") (Lit (LInt 10)))
     , testCase "creates boundary for exponential time" $
         complexityToBoundary (Exponential 2 "n") Int 1000000
-            @?= Right (Op LT (Var "n") (Lit (LInt 20)))
+            @?= Right (Op GT (Var "n") (Lit (LInt 20)))
     , testCase "creates simple boundary for logarithmic time" $
         complexityToBoundary (Logarithmic "n") Int 100
-            @?= Right (Lit (LBool True))
+            @?= Right (Lit (LBool False))
     ]
 
 validateComplexityNamesTests = testGroup "validateComplexityNames tests"
@@ -204,7 +204,7 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
     , testCase "exclusively parallelises functions with high trivial complexity" $
         buildFunctionTable 100 (Map.fromList
-        [ ("foo", Complete (Constant 100) [Int, Int] ["n"] basicFuncDefn)
+        [ ("foo", Complete (Constant 101) [Int, Int] ["n"] basicFuncDefn)
         , ("bar", ComplexityDefinition (Constant 10000000) ["n"] basicFuncDefn)
         ])
         @?= Right (Map.fromList 
@@ -218,16 +218,16 @@ buildFunctionTableTests = testGroup "buildFunctionTable tests"
         ])
         @?= Right (Map.fromList 
         [ ("foo", SequentialT [Int, Int] ["n"] 
-                    (If (Op LT (Var "n") (Lit (LInt 10))) 
-                        (App (Var "foo_seq") (Var "n")) 
+                    (If (Op GT (Var "n") (Lit (LInt 10))) 
                         (App (Var "foo_par") (Var "n"))
+                        (App (Var "foo_seq") (Var "n")) 
                     ))
         , ("foo_seq", SequentialT [Int, Int] ["n"] basicFuncDefn)
         , ("foo_par", ParallelT [Int, Int] ["n"] basicFuncGraph)
         , ("bar", Sequential ["n"] 
-                    (If (Op LT (Var "n") (Lit (LInt 100))) 
-                        (App (Var "bar_seq") (Var "n")) 
+                    (If (Op GT (Var "n") (Lit (LInt 100))) 
                         (App (Var "bar_par") (Var "n"))
+                        (App (Var "bar_seq") (Var "n")) 
                     ))
         , ("bar_seq", Sequential ["n"] basicFuncDefn)
         , ("bar_par", Parallel ["n"] basicFuncGraph)

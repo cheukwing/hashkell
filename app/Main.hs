@@ -76,7 +76,7 @@ main = do
             = putStrLn $ n ++ ": " ++ e
         
         handleParsed (n, p)
-            = writeFile out $ generateCode $ createFunctionTable 1000000 p
+            = writeFile out $ generateCode $ createFunctionTable 10000 p
             where out = "./out/par_" ++ Posix.takeFileName n
 
     mapM_ handleNoParse noParse

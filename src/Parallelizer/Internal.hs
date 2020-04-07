@@ -135,7 +135,7 @@ buildFunctionTable steps
                     = (name ++ "_seq", Sequential args defn)
                 p @ (parName, parallel)
                      = (name ++ "_par", Parallel args (createDependencyGraph args defn))
-                branch = (name, Sequential args (If boundary (callFunction seqName args) (callFunction parName args)))
+                branch = (name, Sequential args (If boundary (callFunction parName args) (callFunction seqName args)))
             case (isTrivialBoundary boundary, fromTrivialShouldParallelise boundary) of
                 (True, True)  -> return $ Map.insert name parallel ft
                 (True, False) -> return $ Map.insert name sequential ft
@@ -151,7 +151,7 @@ buildFunctionTable steps
                     = (name ++ "_seq", SequentialT ts args defn)
                 p @ (parName, parallel)
                     = (name ++ "_par", ParallelT ts args (createDependencyGraph args defn))
-                branch = (name, SequentialT ts args (If boundary (callFunction seqName args) (callFunction parName args)))
+                branch = (name, SequentialT ts args (If boundary (callFunction parName args) (callFunction seqName args)))
             case (isTrivialBoundary boundary, fromTrivialShouldParallelise boundary) of
                 (True, True)  -> return $ Map.insert name parallel ft
                 (True, False) -> return $ Map.insert name sequential ft
@@ -173,7 +173,7 @@ getNameType ts args cplx
 -- that the parallelised version will always be run
 fromTrivialShouldParallelise :: Expr -> Bool
 fromTrivialShouldParallelise (Lit (LBool t)) 
-    = not t
+    = t
 fromTrivialShouldParallelise _
     = error "Not a trivial boundary"
 
@@ -207,20 +207,20 @@ extractComplexityName (Logarithmic name)   = name
 -- approximation to determine the boundary. 
 complexityToBoundary :: Cplx -> Type -> Int -> Parallelizer Expr
 complexityToBoundary (Constant n) _ steps
-    = return $ Lit (LBool (n < steps))
+    = return $ Lit (LBool (n > steps))
 complexityToBoundary _ Bool _ 
     -- Cannot create a boundary if the name refers to a bool
     = throwError IncompatibleComplexityAnnotation
 complexityToBoundary c Int steps
     = return $ case c of
         Polynomial name n ->
-            Op LT (Var name) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n))))
+            Op GT (Var name) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n))))
         Exponential n name ->
-            Op LT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
+            Op GT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
         Logarithmic name ->
             --Op LT (Var name) (Lit (LInt (2 ^ steps)))
             -- Unlikely for steps to ever be small enough that n > 2^steps
-            Lit (LBool True)
+            Lit (LBool False)
 
 
 -- parseComplexityExpression parses the annotation and returns its associated
