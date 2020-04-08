@@ -270,20 +270,18 @@ buildGraph (Let defs e) = do
     -- This is a workaround unused definitions appearing as leaves, thus
     -- causing them to appear to be the final answer.
     -- We should instead try to prune definitions which are not used.
+    let workaround name = if null names 
+        then addScopeDependency name
+        else mapM_ (`addDependency` name) names
+            
     either 
         (\x -> do
             name <- depName
-            if null names
-                then do
-                    addScopeDependency name
-                    addDependencyNode name (Expression x)
-                    Right <$> incrementCounter
-                else do
-                    mapM_ (`addDependency` name) names
-                    addDependencyNode name (Expression x)
-                    Right <$> incrementCounter)
+            workaround name
+            addDependencyNode name (Expression x)
+            Right <$> incrementCounter)
         (\name -> do
-            mapM_ (`addDependency` name) names
+            workaround name
             return $ Right name)
         xn
 buildGraph (If e1 e2 e3) = do
