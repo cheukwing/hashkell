@@ -203,6 +203,7 @@ buildGraph :: Expr -> State FunctionState (Either DExpr DName)
 buildGraph (Lit lit) =
     -- literals are atomic
     return (Left (DLit lit))
+-- TODO: simplify the case x + y + z
 buildGraph (Var var) =
     -- assume: var is already defined
     return (Right var)
@@ -251,7 +252,7 @@ buildGraph e @ App{} = do
 buildGraph (Let defs e) = do
     let
         -- assume: definition names are globally unique throughout all paths
-        defToGraph :: Def -> State FunctionState ()
+        defToGraph :: Def -> State FunctionState DName
         defToGraph (Def defName exp) = do
             xn <- buildGraph exp
             -- if definition is atomic, then set as dependent to scope
@@ -261,8 +262,30 @@ buildGraph (Let defs e) = do
                     (\n -> addDependency n defName >> return (DVar n))
             v <- addDependencyIfName xn
             addDependencyNode defName (Expression v)
-    mapM_ defToGraph defs
-    buildGraph e
+            return defName
+    names <- mapM defToGraph defs
+    xn <- buildGraph e
+    -- TODO: currently assumes that all definitions will be used, so
+    -- will compute ALL definitions before the `in' expression.
+    -- This is a workaround unused definitions appearing as leaves, thus
+    -- causing them to appear to be the final answer.
+    -- We should instead try to prune definitions which are not used.
+    either 
+        (\x -> do
+            name <- depName
+            if null names
+                then do
+                    addScopeDependency name
+                    addDependencyNode name (Expression x)
+                    Right <$> incrementCounter
+                else do
+                    mapM_ (`addDependency` name) names
+                    addDependencyNode name (Expression x)
+                    Right <$> incrementCounter)
+        (\name -> do
+            mapM_ (`addDependency` name) names
+            return $ Right name)
+        xn
 buildGraph (If e1 e2 e3) = do
     let 
         handleBranch e = do
@@ -502,11 +525,11 @@ drawDependencyGraph fileName (ns, ds) = do
 depGraphParams :: G.GraphvizParams DName DNode DType () DNode
 depGraphParams = G.defaultParams {
     G.fmtNode = \(name, node) -> case node of
-        Scope         -> [G.toLabel name]
+        Scope         -> [G.toLabel $ "Scope \"" ++ name ++ "\""]
         Expression e  -> [G.toLabel $ name ++ " = " ++ show e]
         Conditional e -> [G.toLabel $ name ++ " = If " ++ show e]
     , G.fmtEdge = \(_, _, t) -> case t of
-        DepD -> []
+        DepD    -> []
         DepThen -> [G.toLabel "then"]
         DepElse -> [G.toLabel "else"]
         DepArg  -> [G.style G.dotted]

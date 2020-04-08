@@ -218,7 +218,7 @@ complexityToBoundary c Int steps
         Exponential n name ->
             Op GT (Var name) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
         Logarithmic name ->
-            --Op LT (Var name) (Lit (LInt (2 ^ steps)))
+            --Op GT (Var name) (Lit (LInt (2 ^ steps)))
             -- Unlikely for steps to ever be small enough that n > 2^steps
             Lit (LBool False)
 

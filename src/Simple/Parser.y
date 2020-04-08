@@ -79,6 +79,7 @@ T    : Int                         { Int }
 
 Expr : if Expr then Expr else Expr { If $2 $4 $6 }
      | let '{' Defs '}' in Expr    { Let $3 $6 }     
+     | let Defs in Expr            { Let $2 $4 }     
      | Form                        { $1 }
 
 Defs : {- empty -}                 { [] }
