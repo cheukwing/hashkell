@@ -1,8 +1,11 @@
 mmult ## a^3;
+mmult :: [[Int]] -> [[Int]] -> [[Int]];
 mmult a b
   = mmult1 a (transpose b);
 
+
 mmult1 ## a^3;
+mmult1 :: [[Int]] -> [[Int]] -> [[Int]];
 mmult1 a b
   = if null a
       then []
@@ -10,6 +13,7 @@ mmult1 a b
 
 
 mmult2 ## b^2;
+mmult2 :: [Int] -> [[Int]] -> [Int];
 mmult2 a b
   = if null b
       then []
@@ -17,6 +21,7 @@ mmult2 a b
 
 
 mmult3 ## a;
+mmult3 :: [Int] -> [Int] -> Int;
 mmult3 a b
   = if null a || null b
       then 0

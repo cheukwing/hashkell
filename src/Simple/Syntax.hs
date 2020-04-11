@@ -36,7 +36,7 @@ data Expr
 instance Show Expr where
     show (If e1 e2 e3) = "if " ++ show e1 ++ " then " ++ show e2 ++ " else " ++ show e3
     show (Let ds e)    = "let " ++ intercalate ";" (map show ds) ++ " in " ++ show e
-    show (App e1 e2)   = show e1 ++ " " ++ show e2
+    show (App e1 e2)   = "(" ++ show e1 ++ " " ++ show e2 ++ ")"
     show (Var n)       = n
     show (Lit l)       = show l
     show (Op op e1 e2) = "(" ++ show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
