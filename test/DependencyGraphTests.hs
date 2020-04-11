@@ -127,6 +127,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     , ("a", "_x0", DepD)
                     , ("_", "a", DepD)
                     , ("_", "b", DepD)
+                    , ("b", "_x0", DepD)
                     ]
                 )
     , testCase "create if graph" $

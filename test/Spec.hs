@@ -46,9 +46,15 @@ parseProgTests = testGroup "parseProg tests"
     , testCase "parses complexity" $
         parseProg "foobar ## n;" @?=
             Right [Cplx "foobar" (Var "n")]
-    , testCase "parses types" $
-        parseProg  "foobar :: Int -> Int;" @?=
+    , testCase "parses regular types" $
+        parseProg "foobar :: Int -> Int;" @?=
             Right [Type "foobar" [Int, Int]]
+    , testCase "parses cons" $
+        parseProg "foobar = 1 : 2 : []" @?=
+            Right [Func "foobar" [] (Op Cons (Lit (LInt 1)) (Op Cons (Lit (LInt 2)) (Lit (LList []))))]
+    , testCase "parses list types" $
+        parseProg "foobar :: [Int] -> [[Bool]] -> Int -> Bool" @?=
+            Right [Type "foobar" [List Int, List (List Bool), Int, Bool]]
     ]
 
 

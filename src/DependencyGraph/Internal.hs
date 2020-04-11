@@ -407,7 +407,7 @@ generateSequentialCode name = do
             -- Scope is encoded as `let {children} in {final descendent}`
             (mLastName, code) <- generateChildren
             let lastName = Maybe.fromJust mLastName
-            return (lastName, "let " ++ code ++ " in " ++  lastName)
+            return (lastName, "let " ++ code ++ " in " ++ lastName)
         Expression e -> do
             -- Expression is encoded as `{name} = {e} {; children}`
             (mLastName, code) <- generateChildren
