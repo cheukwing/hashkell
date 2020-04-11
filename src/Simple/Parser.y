@@ -42,11 +42,15 @@ import Control.Monad.Except
     '*'   { TokenMul }
     '/'   { TokenDiv }
     '^'   { TokenExp }
+    ':'   { TokenCons }
     '('   { TokenLParen }
     ')'   { TokenRParen }
     '{'   { TokenLBrace }
     '}'   { TokenRBrace }
+    '['   { TokenLBrack }
+    ']'   { TokenRBrack }
     ';'   { TokenEnd }
+    ','   { TokenSep }
 
 %monad { Except String } { (>>=) } { return }
 %error { parseError }
@@ -55,6 +59,7 @@ import Control.Monad.Except
 
 %right '||'
 %right '&&'
+%right ':'
 %nonassoc '==' '>' '<' '<=' '>='
 %left '+' '-'
 %left '*' '/'
@@ -62,6 +67,7 @@ import Control.Monad.Except
 %%
 
 Prog : {- empty -}                 { [] }
+     | Decl                        { [ $1 ] }
      | Decl ';' Prog               { $1 : $3 }
 
 Decl : VAR Args '=' Expr           { Func $1 $2 $4 }
@@ -76,6 +82,7 @@ Type : T                           { [ $1 ] }
 
 T    : Int                         { Int }
      | Bool                        { Bool }
+     | '[' T ']'                   { List $2 }
 
 Expr : if Expr then Expr else Expr { If $2 $4 $6 }
      | let '{' Defs '}' in Expr    { Let $3 $6 }     
@@ -83,6 +90,7 @@ Expr : if Expr then Expr else Expr { If $2 $4 $6 }
      | Form                        { $1 }
 
 Defs : {- empty -}                 { [] }
+     | VAR '=' Expr                { [ Def $1 $3 ] }
      | VAR '=' Expr ';' Defs       { (Def $1 $3) : $5 }
 
 Form : Form '+' Form               { Op Add $1 $3 }
@@ -97,6 +105,7 @@ Form : Form '+' Form               { Op Add $1 $3 }
      | Form '>=' Form              { Op GTE $1 $3 }
      | Form '&&' Form              { Op And $1 $3 }
      | Form '||' Form              { Op Or $1 $3 }
+     | Form ':' Form               { Op Cons $1 $3 }
      | Fact                        { $1 }
 
 Fact : Fact Atom                   { App $1 $2 }
@@ -107,6 +116,11 @@ Atom : '(' Expr ')'                { $2 }
      | VAR                         { Var $1 }
      | True                        { Lit (LBool True) }
      | False                       { Lit (LBool False) }
+     | '[' ']'                     { Lit (LList []) }
+     | '[' List ']'                { Lit (LList $2) }
+
+List : Atom                        { [ $1 ] }
+     | Atom ',' List               { $1 : $3 }
 
 
 {

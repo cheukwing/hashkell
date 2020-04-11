@@ -55,11 +55,15 @@ tokens :-
     [\*]                          { \s -> TokenMul }
     [\/]                          { \s -> TokenDiv }
     [\^]                          { \s -> TokenExp}
+    ":"                           { \s -> TokenCons }
 
     \(                            { \s -> TokenLParen }
     \)                            { \s -> TokenRParen }
     \{                            { \s -> TokenLBrace }
     \}                            { \s -> TokenRBrace }
+    \[                            { \s -> TokenLBrack }
+    \]                            { \s -> TokenRBrack }
+    ","                           { \s -> TokenSep }
     ";"                           { \s -> TokenEnd }
 
 {
@@ -81,7 +85,9 @@ data Token
     | TokenDef
     | TokenEQ     | TokenLT     | TokenGT     | TokenLTE | TokenGTE | TokenAnd | TokenOr
     | TokenAdd    | TokenSub    | TokenMul    | TokenDiv | TokenExp
-    | TokenLParen | TokenRParen | TokenLBrace | TokenRBrace
+    | TokenCons
+    | TokenLParen | TokenRParen | TokenLBrace | TokenRBrace | TokenLBrack | TokenRBrack
+    | TokenSep
     | TokenEnd
     | TokenEOF
     deriving (Eq, Show)

@@ -16,11 +16,13 @@ data Decl
 data Type
     = Int
     | Bool
+    | List Type
     deriving Eq
 
 instance Show Type where
-    show Int  = "Int"
-    show Bool = "Bool"
+    show Int      = "Int"
+    show Bool     = "Bool"
+    show (List t) = "[" ++ show t ++ "]"
 
 data Expr
     = If Expr Expr Expr
@@ -29,7 +31,7 @@ data Expr
     | Var Name
     | Lit Lit
     | Op BinOp Expr Expr
-    deriving Eq
+    deriving (Eq, Ord)
 
 instance Show Expr where
     show (If e1 e2 e3) = "if " ++ show e1 ++ " then " ++ show e2 ++ " else " ++ show e3
@@ -41,7 +43,7 @@ instance Show Expr where
 
 data Def
     = Def Name Expr
-    deriving Eq
+    deriving (Eq, Ord)
 
 instance Show Def where
     show (Def n e) = n ++ " = " ++ show e
@@ -49,13 +51,15 @@ instance Show Def where
 data Lit
     = LInt Int
     | LBool Bool
+    | LList [Expr]
     deriving (Eq, Ord)
 
 instance Show Lit where
-    show (LInt i)  = show i
-    show (LBool b) = show b
+    show (LInt i)   = show i
+    show (LBool b)  = show b
+    show (LList ls) = "[" ++ intercalate "," (map show ls) ++"]"
 
-data BinOp = Add | Sub | Mul | Div | Exp | EQ | LT | GT | LTE | GTE | And | Or
+data BinOp = Add | Sub | Mul | Div | Exp | EQ | LT | GT | LTE | GTE | And | Or | Cons
     deriving (Eq, Ord)
 
 instance Show BinOp where
@@ -71,3 +75,4 @@ instance Show BinOp where
     show GTE               = ">="
     show And               = "&&"
     show Or                = "||"
+    show Cons              = ":"
