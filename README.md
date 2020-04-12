@@ -2,6 +2,24 @@
 
 Parser for a simple subset of Haskell with time complexity annotations and dependency graphs.
 
+## Usage
+
+```output
+unnamed project - semi-automatic parallelisation
+
+Usage: simple-haskell-exe FILENAMES... [-p|--parallelise] [-s|--steps ARG]
+                          [-g|--graph]
+  Semi-automatic parallelisation of Simple Haskell
+
+Available options:
+  FILENAMES...             The programs to parallelise
+  -p,--parallelise         Whether to parallelise the input programs
+  -s,--steps ARG           The number of steps to set the parallelisation
+                           boundary to
+  -g,--graph               Whether to draw the graph of parallelisable functions
+  -h,--help                Show this help text
+```
+
 ## Example of Supported Code
 
 ```haskell
