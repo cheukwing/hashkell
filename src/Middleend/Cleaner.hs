@@ -52,10 +52,49 @@ uniqueNamer (If e1 e2 e3) = do
     e3' <- uniqueNamer e3
     return (If e1' e2' e3')
 uniqueNamer (Let defs e) = do
-    (s, m, _) <- get
+    (_, m, _) <- get
     mapM_ updateUniqueState defs
+    -- setup the names for duplicated names in this scope
     defs' <- mapM (\(Def n e) -> Def <$> toUniqueName n <*> uniqueNamer e) defs
     e' <- uniqueNamer e
-    (_, _, c) <- get
+    (s, _, c) <- get
+    -- we want uniqueness for the entire expression, but the renamings are only
+    -- relevant for the scope in `e`; we restore the old renamings
     put (s, m, c)
     return (Let defs' e')
+
+
+
+ensureNoUnusedDefs :: Expr -> Expr
+ensureNoUnusedDefs e = removeUnusedDefs (usedDefs e) e
+
+usedDefs :: Expr -> Set Name
+usedDefs Lit{} 
+    = Set.empty
+usedDefs (Var n) 
+    = Set.singleton n
+usedDefs (Op _ e1 e2) 
+    = Set.union (usedDefs e1) (usedDefs e2)
+usedDefs (App e1 e2)
+    = Set.union (usedDefs e1) (usedDefs e2)
+usedDefs (Let defs e)
+    = Set.unions (usedDefs e : map (\(Def _ e) -> usedDefs e) defs)
+usedDefs (If e1 e2 e3)
+    = Set.unions [usedDefs e1, usedDefs e2, usedDefs e3]
+
+removeUnusedDefs :: Set Name -> Expr -> Expr
+removeUnusedDefs _ e @ Lit{}
+    = e
+removeUnusedDefs _ e @ Var{}
+    = e
+removeUnusedDefs used (Op op e1 e2)
+    = Op op (removeUnusedDefs used e1) (removeUnusedDefs used e2)
+removeUnusedDefs used (App e1 e2)
+    = App (removeUnusedDefs used e1) (removeUnusedDefs used e2)
+removeUnusedDefs used (Let defs e)
+    | null defs' = e'
+    | otherwise  = Let defs' e'
+    where 
+        e'    = removeUnusedDefs used e
+        defs' = map (\(Def n e) -> Def n (removeUnusedDefs used e)) 
+                $ filter (\(Def n _) -> Set.member n used) defs
