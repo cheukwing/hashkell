@@ -1,85 +1,67 @@
 -- Adapted from Write You A Haskell
 module Main where
 
-
-import System.Environment
-import System.Console.GetOpt
-import Control.Monad
-import Control.Monad.Trans
-import System.Console.Haskeline
-
 import CodeGenerator
 import Parallelizer
 import Simple.Parser (parseProg)
 
+import Options.Applicative
+import Data.Semigroup ((<>))
 import Data.List as List
 import Data.Either as Either
 import System.FilePath.Posix as Posix
+import Control.Monad (when)
 
-data Flag = Interactive | File String
-    deriving (Show)
+data Arguments = Arguments
+    { file        :: [String]
+    , parallelise :: Bool
+    , steps       :: Int
+    , graph       :: Bool
+    }
 
-options :: [OptDescr Flag]
-options = []
-    -- [ Option ['i'] ["interactive"] (NoArg Interactive) "interactive mode"
-    -- , Option ['f'] ["file"] (ReqArg File "FILE") "parse a file"
-    -- ]
-
-{-
-process :: String -> IO ()
-process input =
-    case parseProg input of
-        Left err -> do
-            putStrLn "Parse Error:"
-            print err
-        Right ast -> 
-            print ast
-
-parseArgs :: [String] -> IO ([Flag], [String])
-parseArgs argv = 
-    case getOpt Permute options argv of
-        (o, n, []) -> 
-            return (o,n)
-        (_, _, errs) -> 
-            ioError (userError (concat errs ++ usageInfo header options))
-    where header = "Usage: ic [OPTION...] files..."
-
-main :: IO ()
-main = do
-    (_, fs) <- getArgs >>= parseArgs
-    case fs of
-        [] -> 
-            runInputT defaultSettings interactiveLoop
-        files -> 
-            processAllFiles files
-    where
-        interactiveLoop = do
-            minput <- getInputLine "Happy> "
-            case minput of
-                Nothing -> outputStrLn "Goodbye."
-                Just input -> liftIO (process input) >> interactiveLoop
-        processAllFiles = foldr (\ x -> (>>) (liftIO (readFile x >>= process))) 
-                        (putStrLn "Done.")
--}
+arguments :: Parser Arguments
+arguments 
+    = Arguments
+        <$> some (argument str 
+            ( metavar "FILENAMES..." 
+           <> help "The programs to parallelise"))
+        <*> switch
+            ( long "parallelise"
+           <> short 'p'
+           <> help "Whether to parallelise the input programs"
+            )
+        <*> option auto
+            ( long "steps"
+           <> short 's'
+           <> help "The number of steps to set the parallelisation boundary to"
+           <> value 1000 
+            )
+        <*> switch
+            ( long "graph"
+           <> short 'g'
+           <> help "Whether to draw the graph of parallelisable functions"
+            )
 
 main :: IO ()
-main = do
-    files <- getArgs
+main = process =<< execParser args
+    where 
+        args = info (arguments <**> helper)
+                ( fullDesc
+               <> progDesc "Semi-automatic parallelisation of Simple Haskell"
+               <> header "unnamed project - semi-automatic parallelisation"
+                )
+
+process :: Arguments -> IO ()
+process (Arguments files parallelise steps graph) = do
     contents <- mapM readFile files
     let 
         parses = zip files (map parseProg contents)
-        (_noParse, _parsed) = List.partition (Either.isLeft . snd) parses
-        noParse = zip (map fst _noParse) $ Either.lefts $ map snd _noParse
-        parsed = zip (map fst _parsed) $ Either.rights $ map snd _parsed
-
-        handleNoParse (n, e)
+        handleNoParse n e
             = putStrLn $ n ++ ": " ++ e
-        
-        handleParsed (n, p)
-            = writeFile out $ generateCode $ createFunctionTable 1000 p
-            where out = "./out/par_" ++ Posix.takeFileName n
+        handleParsed n p = do
+            when parallelise $
+                let out = "./out/par_" ++ Posix.takeFileName n
+                in writeFile out $ generateCode $ createFunctionTable steps p
+            when graph $ drawGraphs p
 
-    mapM_ handleNoParse noParse
-    mapM_ handleParsed parsed
-
-    
+    mapM_ (\(n, pe) -> either (handleNoParse n) (handleParsed n) pe) parses

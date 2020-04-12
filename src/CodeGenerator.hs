@@ -1,4 +1,8 @@
-module CodeGenerator where
+module CodeGenerator (
+    generateCode,
+    writeCode,
+    drawGraphs
+) where
 
 import Parallelizer
 import Simple.Syntax

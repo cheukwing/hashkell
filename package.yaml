@@ -30,6 +30,7 @@ dependencies:
   - graphviz
   - text
   - filepath
+  - optparse-applicative
 
 library:
   source-dirs: src
