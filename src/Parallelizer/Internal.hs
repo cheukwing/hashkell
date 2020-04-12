@@ -221,6 +221,16 @@ complexityToBoundary c Int steps
             --Op GT (Var name) (Lit (LInt (2 ^ steps)))
             -- Unlikely for steps to ever be small enough that n > 2^steps
             Lit (LBool False)
+complexityToBoundary c (List _) steps
+    = return $ case c of
+        Polynomial name n ->
+            Op GT (App (Var "length") (Var name)) (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n))))
+        Exponential n name ->
+            Op GT (App (Var "length") (Var name)) (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
+        Logarithmic name ->
+            --Op GT (Var name) (Lit (LInt (2 ^ steps)))
+            -- Unlikely for steps to ever be small enough that n > 2^steps
+            Lit (LBool False)
 
 
 -- parseComplexityExpression parses the annotation and returns its associated
