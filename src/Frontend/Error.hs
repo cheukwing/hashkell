@@ -5,4 +5,4 @@ data Error
     | UnsupportedComplexity
     | IncompatibleComplexity
     | DuplicateDeclaration
-    deriving Show
+    deriving (Eq, Show)

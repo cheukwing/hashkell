@@ -1,19 +1,19 @@
-import Simple.Parser (parseProg)
-import Simple.Syntax as Syntax
+import Test.Tasty
+import Test.Tasty.HUnit
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import Test.Tasty
-import Test.Tasty.HUnit
+import Simple.Parser (parseProg)
+import Simple.Syntax as Syntax
 
-import ParallelizerTests
-import DependencyGraphTests
+import FrontendTests
+import MiddleendTests
 
 main = defaultMain $ testGroup "Tests" 
         [ parserTests
-        , parallelizerTests
-        , dependencyGraphTests
+        , frontendTests
+        , middleendTests
         ]
 
 parserTests :: TestTree
