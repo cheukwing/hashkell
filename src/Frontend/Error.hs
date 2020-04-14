@@ -5,3 +5,4 @@ data Error
     | UnsupportedComplexity
     | IncompatibleComplexity
     | DuplicateDeclaration
+    deriving Show

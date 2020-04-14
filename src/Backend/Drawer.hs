@@ -2,6 +2,7 @@ module Backend.Drawer where
 
 import Middleend (DependencyGraph, DNode(..), DType(..))
 import Simple.Syntax
+import Backend.CodeGenerator
 
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TL
@@ -15,12 +16,12 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 
-drawDependencyGraph :: String -> DependencyGraph -> IO ()
-drawDependencyGraph fileName (ns, ds) = do
-    let 
-        dotGraph = G.graphElemsToDot depGraphParams (Map.toList ns) (Set.toList ds)
-        dotText = G.printDotGraph dotGraph
-    TL.writeFile fileName dotText
+graphToDot :: DependencyGraph -> TL.Text
+graphToDot (ns, ds)
+    = G.printDotGraph dotGraph
+    where dotGraph = G.graphElemsToDot depGraphParams 
+            (Map.toList ns)
+            (Set.toList ds)
 
 
 -- Parameters for GraphViz
@@ -28,8 +29,8 @@ depGraphParams :: G.GraphvizParams Name DNode DType () DNode
 depGraphParams = G.defaultParams {
     G.fmtNode = \(name, node) -> case node of
         Scope         -> [G.toLabel $ "Scope \"" ++ name ++ "\""]
-        Expression e  -> [G.toLabel $ name ++ " = " ++ show e]
-        Conditional e -> [G.toLabel $ name ++ " = If " ++ show e]
+        Expression e  -> [G.toLabel $ name ++ " = " ++ dexprToCode e]
+        Conditional e -> [G.toLabel $ name ++ " = If " ++ dexprToCode e]
     , G.fmtEdge = \(_, _, t) -> case t of
         Dep      -> []
         DepThen  -> [G.toLabel "then"]

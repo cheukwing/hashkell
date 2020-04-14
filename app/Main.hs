@@ -1,8 +1,9 @@
 -- Adapted from Write You A Haskell
 module Main where
 
-import CodeGenerator
-import Parallelizer
+import Frontend
+import Middleend
+import Backend
 import Simple.Parser (parseProg)
 
 import Options.Applicative
@@ -11,6 +12,7 @@ import Data.List as List
 import Data.Either as Either
 import System.FilePath.Posix as Posix
 import Control.Monad (when)
+import qualified Data.Text.Lazy.IO as TL
 
 data Arguments = Arguments
     { file        :: [String]
@@ -54,14 +56,27 @@ main = process =<< execParser args
 process :: Arguments -> IO ()
 process (Arguments files parallelise steps graph) = do
     contents <- mapM readFile files
-    let 
-        parses = zip files (map parseProg contents)
-        handleNoParse n e
-            = putStrLn $ n ++ ": " ++ e
-        handleParsed n p = do
-            when parallelise $
-                let out = "./out/par_" ++ Posix.takeFileName n
-                in writeFile out $ generateCode $ createFunctionTable steps p
-            when graph $ drawGraphs p
-
-    mapM_ (\(n, pe) -> either (handleNoParse n) (handleParsed n) pe) parses
+    let parses = zip files (map parseProg contents)
+        processSingle n prog =
+            case Frontend.pipeline prog of
+                Left err ->
+                    putStrLn $ n ++ ": Annotation error - " ++ show err
+                Right at -> do
+                    let eit = Middleend.pipeline steps at
+                    when parallelise $
+                        let out = "./out/par_" ++ Posix.takeFileName n
+                        in writeFile out (Backend.pipelineEncode eit)
+                    when graph $ 
+                        let drawnGraphs
+                                = Backend.pipelineDraw eit
+                            drawnGraphsWithName 
+                                = map (\(n, t) -> ("./out/" ++ n ++ ".dot", t)) drawnGraphs
+                        in mapM_ (uncurry TL.writeFile) drawnGraphsWithName
+    mapM_ (\(n, pe) -> 
+            case pe of
+                Left err -> 
+                    putStrLn $ n ++ ": Parse error - " ++ err
+                Right prog ->
+                    processSingle n prog
+          )
+          parses

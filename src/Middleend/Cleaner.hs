@@ -105,3 +105,7 @@ removeUnusedDefs used (Let defs e)
         e'    = removeUnusedDefs used e
         defs' = map (\(Def n e) -> Def n (removeUnusedDefs used e)) 
                 $ filter (\(Def n _) -> Set.member n used) defs
+removeUnusedDefs used (If e1 e2 e3)
+    = If (removeUnusedDefs used e1)
+        (removeUnusedDefs used e2)
+        (removeUnusedDefs used e3)

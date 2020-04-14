@@ -34,15 +34,16 @@ encode :: EncodingInstructionTable -> Code
 encode 
     = intercalate "\n\n" . (:) header . map encode' . Map.toList
     where
-        typeSignature = Maybe.maybe "" ((++) "\n" . signatureToCode)
+        typeSignature n = Maybe.maybe "" 
+                            ((++) (n ++ " :: ") . flip (++) "\n" . signatureToCode)
         definition    = (flip (++) " = " .) . (unwords .) . (:)
         encode' :: (Name, EncodingInstruction) -> Code
         encode' (name, Sequential mts params e)
-            = typeSignature mts 
+            = typeSignature name mts 
                 ++ definition name params 
                 ++ exprToCode e
         encode' (name, Parallel mts params dg)
-            = typeSignature mts 
+            = typeSignature name mts 
                 ++ definition name params 
                 ++ graphToCode dg True
 
@@ -314,7 +315,7 @@ graphToParallelCode name = do
                     (True, _)        ->
                         "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     _                ->
-                        name ++ " = " ++ show e
+                        name ++ " = " ++ dexprToCode e
             case mLastName of
                 Just lastName -> return (lastName, expCode ++ "; " ++ code)
                 Nothing       -> return (name, expCode)
