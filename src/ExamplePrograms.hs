@@ -2,6 +2,7 @@ module ExamplePrograms where
 
 import Simple.Syntax
 
+-- TODO: out of date
 
 naiveFibProg :: Prog
 naiveFibProg = [Cplx "fib" (Op Exp (Lit (LInt 2)) (Var "n")), Type "fib" [Int, Int], naiveFibFunc]

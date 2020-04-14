@@ -13,10 +13,12 @@ data ParallelisationType
     = Always
     | Branching Expr
     | Never
+    deriving (Eq, Show)
 
 data EncodingInstruction
     = Sequential (Maybe [Type]) [Name] Expr
     | Parallel (Maybe [Type]) [Name] DependencyGraph
+    deriving (Eq, Show)
 
 type EncodingInstructionTable = Map Name EncodingInstruction
 
@@ -48,39 +50,38 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
 
 createEncodingInstructionTable :: Steps -> AggregationTable -> EncodingInstructionTable
 createEncodingInstructionTable steps
-    = foldl (aggregationToInstruction steps) Map.empty . Map.toList
-
-
-aggregationToInstruction :: Steps -> EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
--- no func
-aggregationToInstruction _ eit (_, (_, _, Nothing))
-    = eit
--- func, but no cplx
-aggregationToInstruction _ eit (name, (Nothing, mts, Just (params, defn)))
-    = Map.insert name (Sequential mts params defn) eit
--- there is a func and cplx
-aggregationToInstruction steps eit (name, agg @ (_, mts, Just (params, defn)))
-    = case parallelisationType steps agg of
-        Never ->
-            Map.insert name seq eit
-        Always ->
-            Map.insert name par eit 
-        Branching bound ->
-            Map.insert seqName seq
-                $ Map.insert parName par
-                $ Map.insert name
-                    (Sequential mts 
-                        params 
-                        (If bound 
-                            (callFunction parName)
-                            (callFunction seqName)))
-                    eit
-    where
-        -- TODO: dg analysis
-        dg             = createDependencyGraph params defn
-        -- TODO: rename all recursive calls to seqName
-        seq            = Sequential mts params defn
-        seqName        = name ++ "_seq"
-        par            = Parallel mts params dg
-        parName        = name ++ "_par"
-        callFunction n = foldl (\app a -> App app (Var a)) (Var n) params
+    = foldl aggToInstr Map.empty . Map.toList
+    where 
+        aggToInstr :: EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
+        -- no func
+        aggToInstr eit (_, (_, _, Nothing))
+            = eit
+        -- func, but no cplx
+        aggToInstr eit (name, (Nothing, mts, Just (params, defn)))
+            = Map.insert name (Sequential mts params defn) eit
+        -- there is a func and cplx
+        aggToInstr eit (name, agg @ (_, mts, Just (params, defn)))
+            = case parallelisationType steps agg of
+                Never ->
+                    Map.insert name seq eit
+                Always ->
+                    Map.insert name par eit 
+                Branching bound ->
+                    Map.insert seqName seq
+                        $ Map.insert parName par
+                        $ Map.insert name
+                            (Sequential mts 
+                                params 
+                                (If bound 
+                                    (callFunction parName)
+                                    (callFunction seqName)))
+                            eit
+            where
+                -- TODO: dg analysis
+                dg             = createDependencyGraph params defn
+                -- TODO: rename all recursive calls to seqName
+                seq            = Sequential mts params defn
+                seqName        = name ++ "_seq"
+                par            = Parallel mts params dg
+                parName        = name ++ "_par"
+                callFunction n = foldl (\app a -> App app (Var a)) (Var n) params

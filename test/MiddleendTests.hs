@@ -4,15 +4,21 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Prelude hiding (EQ, LT, GT)
-import Data.Either (Either(..))
+import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 
 import Simple.Syntax
+import Frontend (Cplx(..))
 import Middleend.Cleaner (ensureUniqueNames, ensureNoUnusedDefs)
+import Middleend.Paralleliser (parallelisationType, ParallelisationType(..), EncodingInstruction(..), createEncodingInstructionTable)
+import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..))
 
 middleendTests :: TestTree
 middleendTests = testGroup "Middleend Tests"
     [ ensureUniqueNamesTests
     , ensureNoUnusedDefsTests
+    , parallelisationTypeTests
+    , createEncodingInstructionTableTests
     ]
 
 ensureUniqueNamesTests = testGroup "ensureUniqueNames tests"
@@ -129,4 +135,113 @@ ensureNoUnusedDefsTests = testGroup "ensureNoUsedDefs tests"
                       , Def "w" (Lit (LInt 4))
                       ] (Lit (LInt 0))))
             @?= Lit (LInt 0)
+    ]
+
+defnWithBranch
+    = Op Add (App (Var "foo") (Lit (LInt 1))) (App (Var "bar") (Lit (LInt 2)))
+functionWithBranch
+    = Just (["n"], defnWithBranch)
+graphWithBranch
+    = ( Map.fromList 
+        [ ("_", Scope)
+        , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+        , ("_x2", Expression (DApp "bar" [DLit (DInt 2)]))
+        , ("_x0", Expression (DOp Add (DVar "_x1") (DVar "_x2")))
+        ]
+      , Set.fromList
+        [ ("_", "_x1", Dep)
+        , ("_", "_x2", Dep)
+        , ("_x1", "_x0", Dep)
+        , ("_x2", "_x0", Dep)
+        ]
+      )
+
+parallelisationTypeTests = testGroup "parallelisationType tests"
+    [ testCase "never parallelise a function with no complexity annotation" $
+        parallelisationType 1000 (Nothing, Just [Int, Int], functionWithBranch)
+            @?= Never
+    , testCase "never parallelise a function with no defn" $
+        parallelisationType 1000 (Just (Polynomial "n" 2), Just [Int, Int], Nothing)
+            @?= Never
+    , testCase "always parallelise a function with constant time greater than steps" $
+        parallelisationType 1000 (Just (Constant 1001), Just [Int, Int], functionWithBranch)
+            @?= Always
+    , testCase "never parallelise a function with constant time lower than steps" $
+        parallelisationType 1000 (Just (Constant 999), Just [Int, Int], functionWithBranch)
+            @?= Never
+    , testCase "never parallelise a function with logarithmic time" $
+        parallelisationType 1000 (Just (Logarithmic "n"), Nothing, functionWithBranch)
+            @?= Never
+    , testCase "branching parallelisation for linear time" $
+        parallelisationType 100 (Just (Polynomial "n" 1), Nothing, functionWithBranch)
+            @?= Branching (Op GT (Var "n") (Lit (LInt 100)))
+    , testCase "branching parallelisation for quadratic time" $
+        parallelisationType 100 (Just (Polynomial "n" 2), Nothing, functionWithBranch)
+            @?= Branching (Op GT (Var "n") (Lit (LInt 10)))
+    , testCase "branching parallelisation for exponential time" $
+        parallelisationType 1000000 (Just (Exponential 2 "n"), Nothing, functionWithBranch)
+            @?= Branching (Op GT (Var "n") (Lit (LInt 20)))
+    , testCase "correct lhs for boundary in branching parallelisation for quadratic time" $
+        parallelisationType 100 (Just (Polynomial "n" 2), Just [List Int, Int], functionWithBranch)
+            @?= Branching (Op GT (App (Var "length") (Var "n")) (Lit (LInt 10)))
+    ]
+
+createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable tests"
+    [ testCase "ignores functions without definitions" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ("foo", (Just (Polynomial "m" 1), Nothing, Nothing))
+        , ("bar", (Just (Polynomial "q" 1), Just [Int, Int], Nothing))
+        , ("baz", (Nothing, Just [Bool, Int, Int, Int, Int, Int], Nothing))
+        ])
+        @?= Map.empty
+    , testCase "does not parallelise functions without complexity annotation" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ("foo", (Nothing, Just [Int, Int], functionWithBranch))
+        , ("bar", (Nothing, Nothing, functionWithBranch))
+        ])
+        @?= Map.fromList 
+        [ ("foo", Sequential (Just [Int, Int]) ["n"] defnWithBranch)
+        , ("bar", Sequential Nothing ["n"] defnWithBranch)
+        ]
+    , testCase "does not parallelise functions with low complexity" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ("foo", (Just (Constant 50), Just [Int, Int], functionWithBranch))
+        , ("bar", (Just (Constant 99), Nothing, functionWithBranch))
+        , ("baz", (Just (Logarithmic "n"), Nothing, functionWithBranch))
+        ])
+        @?= Map.fromList 
+        [ ("foo", Sequential (Just [Int, Int]) ["n"] defnWithBranch)
+        , ("bar", Sequential Nothing ["n"] defnWithBranch)
+        , ("baz", Sequential Nothing ["n"] defnWithBranch)
+        ]
+    , testCase "exclusively parallelises functions with high trivial complexity" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ("foo", (Just (Constant 101), Just [Int, Int], functionWithBranch))
+        , ("bar", (Just (Constant 10000000), Nothing, functionWithBranch))
+        ])
+        @?= Map.fromList 
+        [ ("foo", Parallel (Just [Int, Int]) ["n"] graphWithBranch)
+        , ("bar", Parallel Nothing ["n"] graphWithBranch)
+        ]
+    , testCase "parallelise functions with polynomial complexity" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ("foo", (Just (Polynomial "n" 2), Just [Int, Int], functionWithBranch))
+        , ("bar", (Just (Polynomial "n" 1), Nothing, functionWithBranch))
+        ])
+        @?= Map.fromList 
+        [ ("foo", Sequential (Just [Int, Int]) ["n"] 
+                    (If (Op GT (Var "n") (Lit (LInt 10))) 
+                        (App (Var "foo_par") (Var "n"))
+                        (App (Var "foo_seq") (Var "n")) 
+                    ))
+        , ("foo_seq", Sequential (Just [Int, Int]) ["n"] defnWithBranch)
+        , ("foo_par", Parallel (Just [Int, Int]) ["n"] graphWithBranch)
+        , ("bar", Sequential Nothing ["n"] 
+                    (If (Op GT (Var "n") (Lit (LInt 100))) 
+                        (App (Var "bar_par") (Var "n"))
+                        (App (Var "bar_seq") (Var "n")) 
+                    ))
+        , ("bar_seq", Sequential Nothing ["n"] defnWithBranch)
+        , ("bar_par", Parallel Nothing ["n"] graphWithBranch)
+        ]
     ]
