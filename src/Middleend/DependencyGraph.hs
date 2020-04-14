@@ -50,8 +50,6 @@ type Counter = Int
 type CurrentScope = Name
 type FunctionState = (DependencyGraph, Params, Counter, CurrentScope)
 
-
-
 createDependencyGraph :: [Name] -> Expr -> DependencyGraph
 createDependencyGraph params defn
     = dg

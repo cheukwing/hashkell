@@ -11,7 +11,7 @@ import Simple.Syntax
 import Frontend (Cplx(..))
 import Middleend.Cleaner (ensureUniqueNames, ensureNoUnusedDefs)
 import Middleend.Paralleliser (parallelisationType, ParallelisationType(..), EncodingInstruction(..), createEncodingInstructionTable)
-import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..))
+import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..), createDependencyGraph)
 
 middleendTests :: TestTree
 middleendTests = testGroup "Middleend Tests"
@@ -19,6 +19,7 @@ middleendTests = testGroup "Middleend Tests"
     , ensureNoUnusedDefsTests
     , parallelisationTypeTests
     , createEncodingInstructionTableTests
+    , createDependencyGraphTests
     ]
 
 ensureUniqueNamesTests = testGroup "ensureUniqueNames tests"
@@ -244,4 +245,91 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         , ("bar_seq", Sequential Nothing ["n"] defnWithBranch)
         , ("bar_par", Parallel Nothing ["n"] graphWithBranch)
         ]
+    ]
+
+createDependencyGraphTests = testGroup "createDependencyGraph test"
+    [ testCase "create very basic graph" $
+        createDependencyGraph [] (Lit (LInt 1))
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x0", Expression (DLit (DInt 1)))
+                    ]
+                , Set.fromList [("_", "_x0", Dep)]
+                )
+    , testCase "create very basic graph with argument" $
+        createDependencyGraph ["n"] (Var "n")
+            @?= ( Map.fromList 
+                    [("_", Scope), ("_x0", Expression (DVar "n"))]
+                , Set.fromList 
+                    [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                )
+    , testCase "create atomic binary operation graph" $
+        createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3)))
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x0", Expression (DOp Add (DOp Add (DLit (DInt 1)) (DLit (DInt 2))) (DLit (DInt 3))))
+                    ]
+                , Set.fromList [("_", "_x0", Dep)]
+                )
+    , testCase "create binary operation graph" $
+        createDependencyGraph ["n"] (Op Add (Var "n") (Lit (LInt 3)))
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x0", Expression (DOp Add (DVar "n") (DLit (DInt 3))))
+                    ]
+                , Set.fromList [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                )
+    , testCase "create function application graph" $
+        createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1))))
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x0", Expression (DApp "someFunc" [DVar "n", DOp Add (DLit (DInt 1)) (DLit (DInt 1))]))
+                    ]
+                , Set.fromList [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                )
+    , testCase "create let graph" $
+        createDependencyGraph ["n"] 
+            (Let [ Def "a" (Lit (LInt 1))
+                 , Def "b" (Lit (LInt 2))
+                 ] 
+                 (Op Add (Var "a") (Var "n"))
+            )
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("a", Expression (DLit (DInt 1)))
+                    , ("b", Expression (DLit (DInt 2)))
+                    , ("_x0", Expression (DOp Add (DVar "a") (DVar "n")))
+                    ]
+                , Set.fromList 
+                    [ ("_", "_x0", DepParam)
+                    , ("a", "_x0", Dep)
+                    , ("_", "a", Dep)
+                    , ("_", "b", Dep)
+                    ]
+                )
+    , testCase "create if graph" $
+        createDependencyGraph ["a", "b"] 
+            (If (Op LT (Var "a") (Lit (LInt 1)))
+                (Lit (LInt 2))
+                (App (Var "foobar") (Op Add (Var "a") (Var "b")))
+            )
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x0", Conditional (DOp LT (DVar "a") (DLit (DInt 1))))
+                    , ("_1", Scope)
+                    , ("_x2", Expression (DLit (DInt 2)))
+                    , ("_3", Scope)
+                    , ("_x4", Expression (DApp "foobar" [DOp Add (DVar "a") (DVar "b")]))
+                    ]
+                , Set.fromList 
+                    [ ("_", "_x0", Dep)
+                    , ("_", "_x0", DepParam)
+                    , ("_x0", "_1", DepThen)
+                    , ("_x0", "_3", DepElse)
+                    , ("_1", "_x2", Dep)
+                    , ("_3", "_x4", Dep)
+                    , ("_", "_x4", DepParam)
+                    ]
+                )
+            
     ]
