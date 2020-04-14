@@ -1,7 +1,8 @@
-fib ## 2^n; fib :: Int -> Int;
-fib n = 
-    if n == 0
-        then 1
-        else if n == 1
-            then 1
-            else fib (n - 1) + fib (n - 2);
+fib ## 2^x;
+fib :: Int -> Int;
+fib x =
+  if x < 1
+    then 0
+    else if x < 2
+           then 1
+           else fib (x - 1) + fib (x - 2)
