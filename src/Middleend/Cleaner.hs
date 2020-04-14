@@ -1,7 +1,7 @@
 module Middleend.Cleaner where
 
-
-import Frontend (AggregationTable)
+import Simple.Syntax
+import Frontend (AggregationTable, Aggregation(..))
 
 import Control.Monad.State.Strict
 import Data.Map.Strict (Map)
@@ -11,11 +11,19 @@ import qualified Data.Set as Set
 import Data.List (isPrefixOf)
 import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
-import Simple.Syntax
+
+cleanup :: AggregationTable -> AggregationTable
+cleanup = Map.map cleanup'
+    where
+        clean = ensureNoUnusedDefs . ensureUniqueNames
+        cleanup' :: Aggregation -> Aggregation
+        cleanup' (mcplx, mts, Just (params, e))
+            = (mcplx, mts, Just (params, clean e))
+        cleanup' agg
+            = agg
 
 
 type Counter = Int
-
 type UniqueState = (Set Name, Map Name Name, Counter)
 
 ensureUniqueNames :: Expr -> Expr
@@ -63,8 +71,7 @@ uniqueNamer (Let defs e) = do
     put (s, m, c)
     return (Let defs' e')
 
-
-
+-- pre: all names are unique (use ensureUniqueNames)
 ensureNoUnusedDefs :: Expr -> Expr
 ensureNoUnusedDefs e = removeUnusedDefs (usedDefs e) e
 
