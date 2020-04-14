@@ -9,6 +9,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 type Steps = Int
+-- TODO: branching type has boundary
 data ParallelisationType
     = Always
     | Branching
