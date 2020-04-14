@@ -271,8 +271,8 @@ buildGraph (Let defs e) = do
 buildGraph (If e1 e2 e3) = do
     name <- incrementCounter
     let buildBranch e = do
-            incrementCounter
             oldScope <- addScope >>= setScope
+            incrementCounter
             buildGraph e
             setScope oldScope
     condDExpr <- buildExpr e1

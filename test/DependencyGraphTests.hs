@@ -1,4 +1,5 @@
-module DependencyGraphTests (dependencyGraphTests) where
+module DependencyGraphTests where
+{-
 
 import Simple.Syntax
 import DependencyGraph.Internal 
@@ -170,3 +171,4 @@ encodeDependencyGraphTests = testGroup "encodeDependencyGraph tests"
             @?= "let _x0 = (n == 0); _x14 = if _x0 then let _x2 = 1 in _x2 else let _x4 = (n == 1); _x13 = if _x4 then let _x6 = 1 in _x6 else runEval $ do { let { _x10 = (n - 2) }; _x11 <- rpar (fib _x10); let { _x8 = (n - 1) }; _x9 <- rpar (fib _x8); let { _x12 = (_x9 + _x11) }; return _x12};  in _x13;  in _x14"
 
     ]
+-}
