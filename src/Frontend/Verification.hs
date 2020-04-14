@@ -17,23 +17,15 @@ verify at
 
 
 verifyAggregation :: Aggregation -> Either Error ()
-verifyAggregation Complexity{}
-    = return ()
-verifyAggregation TypeAnnotation{}
-    = return ()
-verifyAggregation Definition{}
-    = return ()
-verifyAggregation (ComplexityType c ts)
+verifyAggregation (Just c, Just ts, Nothing)
     = maybe (return ()) 
         (\_ -> when (null ts) $ throwError IncompatibleComplexity)
         (paramComplexity c)
-verifyAggregation (ComplexityDefinition c params _)
+verifyAggregation (Just c, Nothing, Just (params, _))
     = maybe (return ())
         (\n -> when (n `notElem` params) $ throwError IncompatibleComplexity)
         (paramComplexity c)
-verifyAggregation TypeDefinition{}
-    = return ()
-verifyAggregation (Complete c ts params _)
+verifyAggregation (Just c, Just ts, Just (params, _))
     = maybe (return ())
         (maybe (throwError IncompatibleComplexity)
             (\t -> unless (isSupportedType t) 
@@ -48,3 +40,5 @@ verifyAggregation (Complete c ts params _)
             = case [t | (t, p) <- zip ts params, p == name] of
                 (t : _) -> Just t
                 []      -> Nothing
+verifyAggregation _
+    = return ()
