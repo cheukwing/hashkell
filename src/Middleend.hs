@@ -16,6 +16,8 @@ import Middleend.Cleaner
 import Middleend.Paralleliser
 import Middleend.DependencyGraph
 
+-- pipeline cleans up the given aggregation table by renaming any reused
+-- identifier names, and j
 pipeline :: Steps -> AggregationTable -> EncodingInstructionTable
 pipeline steps
     = createEncodingInstructionTable steps . cleanup

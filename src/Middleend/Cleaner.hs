@@ -8,17 +8,19 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, partition)
 import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
 
 cleanup :: AggregationTable -> AggregationTable
 cleanup = Map.map cleanup'
     where
-        clean = ensureNoUnusedDefs . ensureUniqueNames
         cleanup' :: Aggregation -> Aggregation
         cleanup' (mcplx, mts, Just (params, e))
-            = (mcplx, mts, Just (params, clean e))
+            = (mcplx, mts, Just (finalParams, e''))
+            where
+                (finalParams, e') = ensureUniqueNames params e
+                e''               = ensureNoUnusedDefs e''
         cleanup' agg
             = agg
 
@@ -26,14 +28,35 @@ cleanup = Map.map cleanup'
 type Counter = Int
 type UniqueState = (Set Name, Map Name Name, Counter)
 
-ensureUniqueNames :: Expr -> Expr
-ensureUniqueNames e 
-    = evalState (uniqueNamer e) (Set.empty, Map.empty, 0)
+ensureUniqueNames :: [Name] -> Expr -> ([Name], Expr)
+ensureUniqueNames params e 
+    = (finalParams, evalState (uniqueNamer e) initState)
+    where
+        similarityCheck = zip params (map isSimilarToGeneratedNames params)
+        paramCountUsed  = scanl (\acc (_, s) -> if s then acc + 1 else acc)
+                            0
+                            similarityCheck
+        mappings        = map (\((p, s), c) -> 
+                            if s
+                                then (p, "_y" ++ show c)
+                                else (p, p))
+                            (zip similarityCheck paramCountUsed)
+        finalParams     = map snd mappings
+        initState       = ( Set.fromList finalParams
+                          , Map.fromList (filter (uncurry (/=)) mappings)
+                          , last paramCountUsed
+                          )
+
+
+
+isSimilarToGeneratedNames :: String -> Bool
+isSimilarToGeneratedNames name
+    = ("_x" `isPrefixOf` name) || ("_y" `isPrefixOf` name) 
 
 updateUniqueState :: Def -> State UniqueState ()
 updateUniqueState (Def n _) = do
     (s, m, c) <- get
-    if Set.member n s || "_x" `isPrefixOf` n || "_y" `isPrefixOf` n
+    if Set.member n s || isSimilarToGeneratedNames n
         then put (s, Map.insert n ("_y" ++ show c) m, c + 1)
         else put (Set.insert n s, m, c)
 
