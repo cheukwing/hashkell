@@ -2,7 +2,21 @@
 
 Parser for a simple subset of Haskell with time complexity annotations and dependency graphs.
 
+## Compilation, running, and testing
+
+This project uses [Stack](https://docs.haskellstack.org/en/stable/README/):
+
+```bash
+stack build # to build
+
+stack run -- <args> # to run with <args>
+
+stack test # to test
+```
+
 ## Usage
+
+The arguments to pass into the program are:
 
 ```output
 unnamed project - semi-automatic parallelisation
