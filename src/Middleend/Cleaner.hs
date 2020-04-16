@@ -20,7 +20,7 @@ cleanup = Map.map cleanup'
             = (mcplx, mts, Just (finalParams, e''))
             where
                 (finalParams, e') = ensureUniqueNames params e
-                e''               = ensureNoUnusedDefs e''
+                e''               = ensureNoUnusedDefs e'
         cleanup' agg
             = agg
 
@@ -112,7 +112,7 @@ uniqueNamer (Let defs e) = do
 
 --- No unsed Defs ---
 
--- pre: all names are unique (use ensureUniqueNames)
+-- PRE: all names are unique (use ensureUniqueNames)
 -- ensureNoUnusedDefs removes any unused definitions in let expressions
 -- this is necessary for the usage of a dependency graph to be correct, since
 -- we assume that all leaf nodes are potential return values, but unused definitions
@@ -121,6 +121,9 @@ ensureNoUnusedDefs :: Expr -> Expr
 ensureNoUnusedDefs e 
     | e == e'   = e
     | otherwise = ensureNoUnusedDefs e' 
+    -- we do this repeatedly until the expression is unchanged to handle chains
+    -- of unused definitions
+    -- TODO: could improve this algorithm
     where e' = removeUnusedDefs (usedDefs e) e
 
 -- usedDefs recursively traverses an expression and builds a set of all the
@@ -135,10 +138,14 @@ usedDefs (Op _ e1 e2)
 usedDefs (App e1 e2)
     = Set.union (usedDefs e1) (usedDefs e2)
 usedDefs (Let defs e)
-    = Set.unions (usedDefs e : map (\(Def n e) -> Set.delete n (usedDefs e)) defs)
+    -- get the used identifiers from a Def's expression, but also delete the
+    -- name from the result, the handle recursive definitions (e.g. x = x)
+    = Set.unions (usedDefs e : map (\(Def n de) -> Set.delete n (usedDefs de)) defs)
 usedDefs (If e1 e2 e3)
     = Set.unions [usedDefs e1, usedDefs e2, usedDefs e3]
 
+-- removeUnusedDefs uses the set of used Def names, and removes any Defs
+-- which are not in the set
 removeUnusedDefs :: Set Name -> Expr -> Expr
 removeUnusedDefs _ e @ Lit{}
     = e
@@ -149,6 +156,7 @@ removeUnusedDefs used (Op op e1 e2)
 removeUnusedDefs used (App e1 e2)
     = App (removeUnusedDefs used e1) (removeUnusedDefs used e2)
 removeUnusedDefs used (Let defs e)
+    -- if all are unused, then we can just return the expression
     | null defs' = e'
     | otherwise  = Let defs' e'
     where 
