@@ -15,6 +15,18 @@ data Cplx
     deriving (Eq, Show)
 
 
+-- parseComplexity returns the Cplx for a valid and supported complexity
+-- annotation, or an error otherwise
+--
+-- Illegal:
+-- - if ... then .. else
+-- - let ... in ...
+-- - someFunc ...
+-- - True / False / [1, 2, ...] / etc
+-- 
+-- Unsupported (but parseable):
+-- - log 10 / logBase ...
+-- - 1 + 1 / 10 * x / etc
 parseComplexity :: Expr -> Either Error Cplx
 parseComplexity If{}
     = throwError IllegalComplexity
@@ -39,6 +51,8 @@ parseComplexity (Op Exp (Lit (LInt n)) (Var name))
 parseComplexity Op{}
     = throwError UnsupportedComplexity
 
+-- paramComplexity retrieves the name of the parameter referred to in the
+-- complexity if it exists, or Nothing otherwise
 paramComplexity :: Cplx -> Maybe String
 paramComplexity Constant{}        = Nothing
 paramComplexity (Polynomial n _)  = Just n

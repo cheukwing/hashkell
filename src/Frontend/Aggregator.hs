@@ -12,6 +12,11 @@ type Defn = Expr
 type Aggregation = (Maybe Cplx, Maybe [Type], Maybe ([Name], Defn))
 type AggregationTable = Map Name Aggregation
 
+-- aggregate takes the program (a list of declarations) and aggregates
+-- the declarations describing the same function together so that they
+-- can be considered together in later stages of parallelisation.
+-- during aggregation, the complexity annotation is parsed to ensure
+-- it is both valid and supported
 aggregate :: Prog -> Either Error AggregationTable
 aggregate = foldM aggregate' Map.empty
     where
