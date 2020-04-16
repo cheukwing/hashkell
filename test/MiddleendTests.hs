@@ -131,6 +131,11 @@ ensureUniqueNamesTests = testGroup "ensureUniqueNames tests"
             (Let [Def "_x" (Lit (LInt 1))] (Op Add (Var "_x") (Var "_y")))
             @?=
             (["_y0", "_y1"], Let [Def "_y2" (Lit (LInt 1))] (Op Add (Var "_y2") (Var "_y1")))
+    , testCase "changes only param names which are similar to generated names and their users" $
+        ensureUniqueNames ["x", "_x", "_y", "y", "_y1"] 
+            (Let [Def "_x" (Lit (LInt 1))] (Op Add (Var "_x") (Var "_y")))
+            @?=
+            (["x", "_y0", "_y1", "y", "_y2"], Let [Def "_y3" (Lit (LInt 1))] (Op Add (Var "_y3") (Var "_y1")))
     ]
 
 ensureNoUnusedDefsTests = testGroup "ensureNoUsedDefs tests"
