@@ -175,6 +175,19 @@ ensureNoUnusedDefsTests = testGroup "ensureNoUsedDefs tests"
                       , Def "w" (Lit (LInt 4))
                       ] (Lit (LInt 0))))
             @?= Lit (LInt 0)
+    , testCase "removes unused defs which are used by other unuseddefs" $
+        ensureNoUnusedDefs
+            (Let [ Def "x" (Lit (LInt 1))
+                 , Def "y" (Var "x")
+                 , Def "z" (Var "y")]
+                 (Let [ Def "w" (Var "z")] (Lit (LInt 2))))
+            @?= Lit (LInt 2)
+    , testCase "removes unused defs which are recursive" $
+        ensureNoUnusedDefs
+            (Let [ Def "x" (Var "x")
+                 , Def "y" (Op Add (Var "x") (Var "y"))]
+                 (Lit (LInt 2)))
+            @?= Lit (LInt 2)
     ]
 
 defnWithBranch
