@@ -225,18 +225,21 @@ parallelisationTypeTests = testGroup "parallelisationType tests"
     , testCase "never parallelise a function with logarithmic time" $
         parallelisationType 1000 (Just (Logarithmic "n"), Nothing, functionWithBranch)
             @?= Never
+    , testCase "never parallelise a function with logarithmic time" $
+        parallelisationType 1000 (Just (Factorial "n"), Nothing, functionWithBranch)
+            @?= Branching (Op GTE (Var "n") (Lit (LInt 7)))
     , testCase "branching parallelisation for linear time" $
         parallelisationType 100 (Just (Polynomial "n" 1), Nothing, functionWithBranch)
-            @?= Branching (Op GT (Var "n") (Lit (LInt 100)))
+            @?= Branching (Op GTE (Var "n") (Lit (LInt 100)))
     , testCase "branching parallelisation for quadratic time" $
         parallelisationType 100 (Just (Polynomial "n" 2), Nothing, functionWithBranch)
-            @?= Branching (Op GT (Var "n") (Lit (LInt 10)))
+            @?= Branching (Op GTE (Var "n") (Lit (LInt 10)))
     , testCase "branching parallelisation for exponential time" $
         parallelisationType 1000000 (Just (Exponential 2 "n"), Nothing, functionWithBranch)
-            @?= Branching (Op GT (Var "n") (Lit (LInt 20)))
-    , testCase "correct lhs for boundary in branching parallelisation for quadratic time" $
+            @?= Branching (Op GTE (Var "n") (Lit (LInt 20)))
+    , testCase "correct lhs for boundary in branching parallelisation for list type" $
         parallelisationType 100 (Just (Polynomial "n" 2), Just [List Int, Int], functionWithBranch)
-            @?= Branching (Op GT (App (Var "length") (Var "n")) (Lit (LInt 10)))
+            @?= Branching (Op GTE (App (Var "length") (Var "n")) (Lit (LInt 10)))
     ]
 
 createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable tests"
@@ -283,14 +286,14 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         ])
         @?= Map.fromList 
         [ ("foo", Sequential (Just [Int, Int]) ["n"] 
-                    (If (Op GT (Var "n") (Lit (LInt 10))) 
+                    (If (Op GTE (Var "n") (Lit (LInt 10))) 
                         (App (Var "foo_par") (Var "n"))
                         (App (Var "foo_seq") (Var "n")) 
                     ))
         , ("foo_seq", Sequential (Just [Int, Int]) ["n"] defnWithBranch)
         , ("foo_par", Parallel (Just [Int, Int]) ["n"] graphWithBranch)
         , ("bar", Sequential Nothing ["n"] 
-                    (If (Op GT (Var "n") (Lit (LInt 100))) 
+                    (If (Op GTE (Var "n") (Lit (LInt 100))) 
                         (App (Var "bar_par") (Var "n"))
                         (App (Var "bar_seq") (Var "n")) 
                     ))

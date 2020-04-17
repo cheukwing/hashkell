@@ -37,11 +37,17 @@ parallelisationType steps (Just Logarithmic{}, _, _)
 parallelisationType steps (Just cplx, mts, Just (params, _))
     = case cplx of
         Polynomial param n ->
-            Branching $ Op GT (lhs param) 
+            -- param^n > steps => param >= ceil (n_root steps)
+            Branching $ Op GTE (lhs param) 
                 (Lit (LInt (ceiling $ fromIntegral steps ** (1 / fromIntegral n))))
         Exponential n param ->
-            Branching $ Op GT (lhs param)
+            -- n^param > steps => param >= ceil (log_n steps)
+            Branching $ Op GTE (lhs param)
                 (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
+        Factorial param ->
+            -- param! > steps => param >= n (where n! > steps)
+            Branching $ Op GTE (lhs param)
+                (Lit (LInt (snd . head $ dropWhile (flip (<) 1000 . fst) $ scanl (\(f, i) n -> (f * n, i + 1)) (1, 0) [1..])))
     where
         lhs name = case mts of
                 Just ts -> 

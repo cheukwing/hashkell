@@ -24,6 +24,9 @@ parseComplexityTests = testGroup "parseComplexity tests"
     [ testCase "logarithmic time is parsed" $
         parseComplexity (App (Var "log") (Var "n"))
             @?= Right (Logarithmic "n")
+    , testCase "factorial time is parsed" $
+        parseComplexity (App (Var "fac") (Var "n"))
+            @?= Right (Factorial "n")
     , testCase "linear time is parsed" $
         parseComplexity (Var "n")
             @?= Right (Polynomial "n" 1)
@@ -44,6 +47,9 @@ parseComplexityTests = testGroup "parseComplexity tests"
             @?= Left IllegalComplexity
     , testCase "log applied to non-var is unsupported" $
         parseComplexity (App (Var "log") (Lit (LInt 16)))
+            @?= Left UnsupportedComplexity
+    , testCase "fac applied to non-var is unsupported" $
+        parseComplexity (App (Var "fac") (Lit (LInt 16)))
             @?= Left UnsupportedComplexity
     , testCase "arbitrary applications are illegal" $
         parseComplexity (App (Var "frog") (Var "n"))

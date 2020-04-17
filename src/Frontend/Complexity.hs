@@ -6,12 +6,12 @@ import Frontend.Error
 import Data.Either (Either)
 import Control.Monad.Except (throwError)
 
--- TODO: support factorial
 data Cplx
     = Constant Int
     | Polynomial Name Int
     | Exponential Int Name
     | Logarithmic Name
+    | Factorial Name
     deriving (Eq, Show)
 
 
@@ -25,7 +25,7 @@ data Cplx
 -- - True / False / [1, 2, ...] / etc
 -- 
 -- Unsupported (but parseable):
--- - log 10 / logBase ...
+-- - log 10 / logBase ... / fac 10 / ...
 -- - 1 + 1 / 10 * x / etc
 parseComplexity :: Expr -> Either Error Cplx
 parseComplexity If{}
@@ -35,6 +35,10 @@ parseComplexity Let{}
 parseComplexity (App (Var "log") (Var name)) 
     = return (Logarithmic name)
 parseComplexity (App (Var "log") _) 
+    = throwError UnsupportedComplexity
+parseComplexity (App (Var "fac") (Var name)) 
+    = return (Factorial name)
+parseComplexity (App (Var "fac") _) 
     = throwError UnsupportedComplexity
 parseComplexity App{}
     = throwError IllegalComplexity
@@ -58,3 +62,4 @@ paramComplexity Constant{}        = Nothing
 paramComplexity (Polynomial n _)  = Just n
 paramComplexity (Exponential _ n) = Just n
 paramComplexity (Logarithmic n)   = Just n
+paramComplexity (Factorial n)   = Just n
