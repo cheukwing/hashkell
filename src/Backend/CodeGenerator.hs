@@ -183,6 +183,7 @@ getBranch p t = do
 
 -- satisifiedChildren returns the children of the given node whose 
 -- dependencies are met, i.e. their code has been generated.
+-- TODO: consider dependency on scope, must be inside scope to generate!!! -- handled by new graph?
 satisfiedChildren :: Name -> State GenerationState [Name]
 satisfiedChildren name = do
     (_, gns, _) <- get

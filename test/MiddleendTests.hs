@@ -313,7 +313,9 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
             @?= ( Map.fromList 
                     [("_", Scope), ("_x0", Expression (DVar "n"))]
                 , Set.fromList 
-                    [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                    [ ("_", "_x0", Dep)
+                    --, ("_", "_x0", DepParam)
+                    ]
                 )
     , testCase "create atomic binary operation graph" $
         createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3)))
@@ -329,7 +331,10 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DVar "n") (DLit (DInt 3))))
                     ]
-                , Set.fromList [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                , Set.fromList 
+                    [ ("_", "_x0", Dep)
+                    --, ("_", "_x0", DepParam)
+                    ]
                 )
     , testCase "create function application graph" $
         createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1))))
@@ -337,7 +342,10 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     [ ("_", Scope)
                     , ("_x0", Expression (DApp "someFunc" [DVar "n", DOp Add (DLit (DInt 1)) (DLit (DInt 1))]))
                     ]
-                , Set.fromList [("_", "_x0", Dep), ("_", "_x0", DepParam)]
+                , Set.fromList 
+                    [ ("_", "_x0", Dep)
+                    --, ("_", "_x0", DepParam)
+                    ]
                 )
     , testCase "create let graph" $
         createDependencyGraph ["n"] 
@@ -353,10 +361,10 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     , ("_x0", Expression (DOp Add (DVar "a") (DVar "n")))
                     ]
                 , Set.fromList 
-                    [ ("_", "_x0", DepParam)
-                    , ("a", "_x0", Dep)
+                    [ ("a", "_x0", Dep)
                     , ("_", "a", Dep)
                     , ("_", "b", Dep)
+--                  , ("_", "_x0", DepParam)
                     ]
                 )
     , testCase "create if graph" $
@@ -375,13 +383,12 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     ]
                 , Set.fromList 
                     [ ("_", "_x0", Dep)
-                    , ("_", "_x0", DepParam)
+--                    , ("_", "_x0", DepParam)
                     , ("_x0", "_1", DepThen)
                     , ("_x0", "_3", DepElse)
                     , ("_1", "_x2", Dep)
                     , ("_3", "_x4", Dep)
-                    , ("_", "_x4", DepParam)
+--                    , ("_", "_x4", DepParam)
                     ]
                 )
-            
     ]

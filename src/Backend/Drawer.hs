@@ -35,5 +35,5 @@ depGraphParams = G.defaultParams {
         Dep      -> []
         DepThen  -> [G.toLabel "then"]
         DepElse  -> [G.toLabel "else"]
-        DepParam -> [G.style G.dotted]
+--       DepParam -> [G.style G.dotted]
 }
