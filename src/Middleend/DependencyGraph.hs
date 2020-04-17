@@ -22,7 +22,7 @@ data DType
     = Dep
     | DepThen
     | DepElse
-    | DepParam
+--    | DepParam
     deriving (Eq, Show, Ord)
 
 data DNode
@@ -87,9 +87,13 @@ setScope s = do
 
 
 -- hasParent checks if the node with the given name has any parent nodes.
-hasParent :: DependencyGraph -> Name -> Bool
-hasParent (_, ds) name =
-    not $ null $ Set.filter (\(_, c, t) -> c == name && t == Dep) ds
+hasParent :: Name -> State FunctionState Bool
+hasParent name = do
+    ((_, ds), _, _, scope) <- get
+    let dependencies = Set.filter (\(_, c, t) -> c == name && t == Dep) ds
+    scopedPs <- filterM (\(p, _, _) -> p `isDescendentOf` scope) 
+        (Set.toList dependencies)
+    return (not (null scopedPs))
 
 
 -- addArc inserts a dependency arc into the state
@@ -120,7 +124,7 @@ addDependency child parent = do
     (graph, params, counter, scope) <- get
     if parent `elem` params then do
         -- setup an arc to signify a use of a param in this node
-        addArc ("_", child, DepParam)
+--        addArc ("_", child, DepParam)
         depAlreadyExists <- child `isDescendentOf` scope
         if depAlreadyExists
             then return ()
@@ -137,7 +141,8 @@ addDependency child parent = do
 addScopeDependency :: Name -> State FunctionState ()
 addScopeDependency child = do
     (graph, params, counter, scope) <- get
-    if hasParent graph child 
+    hp <- hasParent child
+    if hp
         then return ()
         else addArc (scope, child, Dep)
 
@@ -243,6 +248,8 @@ buildGraph (Var var) = do
     return name
 buildGraph (Op op e1 e2) = do
     name <- incrementCounter
+    -- TODO: a + b + c, where none are atomic, but will return a var if built separately
+    -- can we combine them into a single expr???
     dexpr <- DOp op <$> buildExpr e1 <*> buildExpr e2
     setupExpressionNode name dexpr
     return name
@@ -259,20 +266,35 @@ buildGraph e @ App{} = do
     setupExpressionNode name dexpr
     return name
 buildGraph (Let defs e) = do
-    name <- incrementCounter
+    --name <- incrementCounter
     let buildDef (Def defName defE) =
             buildExpr defE >>= setupExpressionNode defName
     mapM_ buildDef defs
+    {-
     dexpr <- buildExpr e
     setupExpressionNode name dexpr
     return name
+    -}
+    buildGraph e
 buildGraph (If e1 e2 e3) = do
     name <- incrementCounter
     let buildBranch e = do
             oldScope <- addScope >>= setScope
             incrementCounter
-            buildGraph e
+            buildGraph e >>= addScopeDependency
+            rearrangeExternalDependencies 
             setScope oldScope
+        rearrangeExternalDependencies = do
+            ((ns, ds), params, counter, scope) <- get
+            internal <- internalNodes scope
+            let externalDeps = Set.filter 
+                    (\(p, c, _) -> Set.member c internal 
+                        && Set.notMember p internal)
+                    ds
+                ds' = Set.difference ds externalDeps
+                fixedDeps = Set.map (\(p, _, t) -> (p, name, t)) externalDeps
+                ds'' = Set.union ds' fixedDeps
+            put ((ns, ds''), params, counter, scope)
     condDExpr <- buildExpr e1
     addDependencyNode name (Conditional condDExpr)
     setupDependencies name condDExpr
@@ -280,3 +302,18 @@ buildGraph (If e1 e2 e3) = do
     elseScope <- buildBranch e3
     addConditionalDependency name thenScope elseScope
     return name
+
+
+internalNodes :: Name -> State FunctionState (Set Name)
+internalNodes name = do
+    ((_, ds), _, _, _) <- get
+    let bfs :: Set Name -> [Name] -> Set Name
+        bfs visited  [] 
+            = visited
+        bfs visited (n : ns)
+            | Set.member n visited = bfs visited ns
+            | otherwise            = bfs (Set.insert n visited) (ns ++ children)
+            where children = Set.toList 
+                    $ Set.map (\(_, c, _) -> c) 
+                    $ Set.filter (\(p, _, _) -> p == n) ds
+    return $ bfs Set.empty [name]
