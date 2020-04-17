@@ -10,9 +10,9 @@ import qualified Data.Map.Strict as Map
 
 type Steps = Int
 data ParallelisationType
-    = Always
-    | Branching Expr
-    | Never
+    = Always -- Always parallelise
+    | Branching Expr -- Parallelise if the condition is met
+    | Never -- Never parallelise
     deriving (Eq, Show)
 
 data EncodingInstruction
@@ -22,6 +22,9 @@ data EncodingInstruction
 
 type EncodingInstructionTable = Map Name EncodingInstruction
 
+-- parallelisationType takes the steps approximating the overhead from
+-- parallelisation, and the aggregation of a function, to determine whether
+-- it is worth parallelising the function
 parallelisationType :: Steps -> Aggregation -> ParallelisationType
 parallelisationType _ (Nothing, _, _)
     = Never
@@ -48,28 +51,34 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
                 Nothing -> Var name
 
 
+-- createEncodingInstructionTable takes each aggregation and creates encoding
+-- instructions, which tells the code generator to generate a certain function,
+-- and how to generate that function into Haskell, i.e. whether in sequential
+-- or parallel
 createEncodingInstructionTable :: Steps -> AggregationTable -> EncodingInstructionTable
 createEncodingInstructionTable steps
     = foldl aggToInstr Map.empty . Map.toList
     where 
         aggToInstr :: EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
-        -- no func
+        -- If there is no definition, do not bother encoding at all
         aggToInstr eit (_, (_, _, Nothing))
             = eit
-        -- func, but no cplx
+        -- If we have no complexity, just encode it as it was (sequentially)
         aggToInstr eit (name, (Nothing, mts, Just (params, defn)))
             = Map.insert name (Sequential mts params defn) eit
-        -- there is a func and cplx
+        -- If we have a complexity and definition, then assess whether it is
+        -- worth parallelising, then add the relevant encoding instructions
         aggToInstr eit (name, agg @ (_, mts, Just (params, defn)))
             = case parallelisationType steps agg of
-                Never ->
+                Never -> -- Never parallelise, then encode sequentially
                     Map.insert name seq eit
-                Always ->
+                Always -> -- Always parallelise, then encode parallel
                     Map.insert name par eit 
-                Branching bound ->
+                Branching bound -> -- Parallelise if the condition is met
                     Map.insert seqName seq
                         $ Map.insert parName par
                         $ Map.insert name
+                            -- the Branching call
                             (Sequential mts 
                                 params 
                                 (If bound 

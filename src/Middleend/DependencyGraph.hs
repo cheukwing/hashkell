@@ -293,13 +293,22 @@ buildGraph (If e1 e2 e3) = do
     condDExpr <- buildExpr e1
     addDependencyNode name (Conditional condDExpr)
     setupDependencies name condDExpr
-    let buildBranch e = do
+    let -- buildBranch creates the scope and expression for the given branch
+        buildBranch e = do
             oldScope <- addScope >>= setScope
             buildGraph e >>= addScopeDependency
             rearrangeExternalDependencies 
             setScope oldScope
-
-        -- TODO: workaround... just use bfs in generation????
+        -- rearrangeExternalDependencies handles situations where an expression
+        -- within a certain scope depends on a let definition outside of this
+        -- scope -- e.g. let ... in (if ...)
+        -- this would create a dependency arc from outside the scope, to inside
+        -- the scope, which does not work with the current code generation
+        -- algorithm (TODO?)
+        -- instead, we check if any nodes in the current scope and below have
+        -- dependencies to some node outside of the scopes, and route that
+        -- to link to the Condition node we are currently generating, ensuring
+        -- that there are no inter-scope connections
         rearrangeExternalDependencies = do
             ((ns, ds), params, counter, scope) <- get
             internal <- internalNodes scope
@@ -310,12 +319,16 @@ buildGraph (If e1 e2 e3) = do
                 ds' = Set.difference ds externalDeps
             put ((ns, ds'), params, counter, scope)
             mapM_ (\(p, _, _) -> addDependency name p) (Set.toList externalDeps)
+    -- setup branches
     thenScope <- buildBranch e2
     elseScope <- buildBranch e3
+    -- add as special dependents of the Condition
     addConditionalDependency name thenScope elseScope
     return name
 
 
+-- internalNodes gets the set of all nodes which are descendents of the
+-- given node
 internalNodes :: Name -> State FunctionState (Set Name)
 internalNodes name = do
     ((_, ds), _, _, _) <- get
