@@ -83,6 +83,9 @@ func ## 100^n;
 
 -- Logarithmic time
 func ## log n;
+
+-- Factorial time
+func ## fac n;
 ```
 
 The given identifier name in the annotation must correspond to an argument in the function declaration, and only one such name is allowed in any annotation.
