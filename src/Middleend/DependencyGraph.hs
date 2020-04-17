@@ -248,11 +248,14 @@ buildExpr e
         return
         (atomicToDExpr e)
 
+buildGraph :: Expr -> State FunctionState Name
+buildGraph = buildGraphWithName Nothing
+
 -- buildGraph builds a node for the given expression, returning the name of the
 -- identifier used for the node
-buildGraph :: Expr -> State FunctionState Name
-buildGraph (Lit lit) = do
-    name <- depName
+buildGraphWithName :: Maybe Name -> Expr -> State FunctionState Name
+buildGraphWithName mn (Lit lit) = do
+    name <- Maybe.maybe depName return mn
     -- create DExpr
     dexpr <- DLit <$> (case lit of
         LInt i  -> return $ DInt i
@@ -263,22 +266,22 @@ buildGraph (Lit lit) = do
     -- setup the node
     setupExpressionNode name dexpr
     return name
-buildGraph (Var var) = do
-    name <- depName
+buildGraphWithName mn (Var var) = do
+    name <- Maybe.maybe depName return mn
     -- just create a new node referring to an existing var
     -- assuming that it has already been created
     -- TODO: some way of determining whether this is actually someFunc/0
     setupExpressionNode name (DVar var)
     return name
-buildGraph e @ (Op op e1 e2) = do
-    name <- depName
+buildGraphWithName mn e @ (Op op e1 e2) = do
+    name <- Maybe.maybe depName return mn
     -- operations are atomic, and will be the combination of multiple atomic
     -- expressions or already-calculated Vars, so we can combine them
     dexpr <- buildOpExpr e
     setupExpressionNode name dexpr
     return name
-buildGraph e @ App{} = do
-    name <- depName
+buildGraphWithName mn e @ App{} = do
+    name <- Maybe.maybe depName return mn
     -- collect the name of the function and its given arguments
     let (fName, args) = collectApp e
         collectApp :: Expr -> (Name, [Expr])
@@ -292,16 +295,13 @@ buildGraph e @ App{} = do
     -- setup this node
     setupExpressionNode name dexpr
     return name
-buildGraph (Let defs e) = do
-    let buildDef (Def defName defE) =
-            -- TODO: remove intermediate identifiers!
-            buildExpr defE >>= setupExpressionNode defName
+buildGraphWithName mn (Let defs e) = do
     -- build the nodes for the definitions
-    mapM_ buildDef defs
+    mapM_ (\(Def defName defE) -> buildGraphWithName (Just defName) defE) defs
     -- then build node for the expression
-    buildGraph e
-buildGraph (If e1 e2 e3) = do
-    name <- depName
+    buildGraphWithName mn e
+buildGraphWithName mn (If e1 e2 e3) = do
+    name <- Maybe.maybe depName return mn
     -- setup the condition
     condDExpr <- buildExpr e1
     addDependencyNode name (Conditional condDExpr)

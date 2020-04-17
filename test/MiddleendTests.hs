@@ -471,28 +471,46 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     ]
                 )
     , testCase "create a single node for the sum of multiple nodes" $
-            createDependencyGraph ["n"] 
+        createDependencyGraph [] 
+            (Op Add 
                 (Op Add 
-                    (Op Add 
-                        (App (Var "foo") (Lit (LInt 1))) 
-                        (App (Var "bar") (Lit (LInt 2)))) 
-                    (App (App (Var "baz") (App (Var "bong") (Lit (LInt 3)))) (Lit (LInt 4))))
-                @?= ( Map.fromList 
-                        [ ("_", Scope)
-                        , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
-                        , ("_x2", Expression (DApp "bar" [DLit (DInt 2)]))
-                        , ("_x3", Expression (DApp "baz" [DVar "_x4", DLit (DInt 4)]))
-                        , ("_x4", Expression (DApp "bong" [DLit (DInt 3)]))
-                        , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DVar "_x2")) (DVar "_x3")))
-                        ]
-                    , Set.fromList 
-                        [ ("_", "_x1", Dep)
-                        , ("_", "_x2", Dep)
-                        , ("_", "_x4", Dep)
-                        , ("_x4", "_x3", Dep)
-                        , ("_x1", "_x0", Dep)
-                        , ("_x2", "_x0", Dep)
-                        , ("_x3", "_x0", Dep)
-                        ]
-                    )
+                    (App (Var "foo") (Lit (LInt 1))) 
+                    (App (Var "bar") (Lit (LInt 2)))) 
+                (App (App (Var "baz") (App (Var "bong") (Lit (LInt 3)))) (Lit (LInt 4))))
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                    , ("_x2", Expression (DApp "bar" [DLit (DInt 2)]))
+                    , ("_x3", Expression (DApp "baz" [DVar "_x4", DLit (DInt 4)]))
+                    , ("_x4", Expression (DApp "bong" [DLit (DInt 3)]))
+                    , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DVar "_x2")) (DVar "_x3")))
+                    ]
+                , Set.fromList 
+                    [ ("_", "_x1", Dep)
+                    , ("_", "_x2", Dep)
+                    , ("_", "_x4", Dep)
+                    , ("_x4", "_x3", Dep)
+                    , ("_x1", "_x0", Dep)
+                    , ("_x2", "_x0", Dep)
+                    , ("_x3", "_x0", Dep)
+                    ]
+                )
+    , testCase "does not create intermediate nodes for let definitions" $
+        createDependencyGraph ["n"]
+            (Let [ Def "a" (App (Var "foo") (Var "n"))
+                 , Def "b" (App (Var "bar") (Var "n"))
+                 ] (Op Add (Var "a") (Var "b")))
+            @?= ( Map.fromList
+                    [ ("_", Scope)
+                    , ("a", Expression (DApp "foo" [DVar "n"]))
+                    , ("b", Expression (DApp "bar" [DVar "n"]))
+                    , ("_x0", Expression (DOp Add (DVar "a") (DVar "b")))
+                    ]
+                , Set.fromList
+                    [ ("_", "a", Dep)
+                    , ("_", "b", Dep)
+                    , ("a", "_x0", Dep)
+                    , ("b", "_x0", Dep)
+                    ]
+            )
     ]
