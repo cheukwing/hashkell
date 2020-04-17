@@ -1,4 +1,3 @@
--- Adapted from Write You A Haskell
 module Main where
 
 import Frontend

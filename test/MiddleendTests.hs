@@ -367,6 +367,25 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
 --                  , ("_", "_x0", DepParam)
                     ]
                 )
+    , testCase "create let graph with reversed expression order" $
+        createDependencyGraph ["n"] 
+            (Let [ Def "a" (Lit (LInt 1))
+                 , Def "b" (Lit (LInt 2))
+                 ] 
+                 (Op Add (Var "n") (Var "a"))
+            )
+            @?= ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("a", Expression (DLit (DInt 1)))
+                    , ("b", Expression (DLit (DInt 2)))
+                    , ("_x0", Expression (DOp Add (DVar "n") (DVar "a")))
+                    ]
+                , Set.fromList 
+                    [ ("a", "_x0", Dep)
+                    , ("_", "a", Dep)
+                    , ("_", "b", Dep)
+                    ]
+                )
     , testCase "create if graph" $
         createDependencyGraph ["a", "b"] 
             (If (Op LT (Var "a") (Lit (LInt 1)))
@@ -389,6 +408,63 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     , ("_1", "_x2", Dep)
                     , ("_3", "_x4", Dep)
 --                    , ("_", "_x4", DepParam)
+                    ]
+                )
+    , testCase "rearrange external dependencies" $
+        createDependencyGraph []
+            (Let [Def "a" (Lit (LInt 1))]
+                 (If (Lit (LBool True)) (Var "a") (Lit (LInt 2))))
+            @?= ( Map.fromList
+                    [ ("_", Scope)
+                    , ("a", Expression (DLit (DInt 1)))
+                    , ("_x0", Conditional (DLit (DBool True)))
+                    , ("_1", Scope)
+                    , ("_x2", Expression (DVar "a"))
+                    , ("_3", Scope)
+                    , ("_x4", Expression (DLit (DInt 2)))
+                    ]
+                , Set.fromList
+                    [ ("_", "a", Dep)
+                    , ("a", "_x0", Dep)
+                    , ("_x0", "_1", DepThen)
+                    , ("_x0", "_3", DepElse)
+                    , ("_1", "_x2", Dep)
+                    , ("_3", "_x4", Dep)
+                    ]
+                )
+    , testCase "rearrange nested external dependencies" $
+        createDependencyGraph []
+            (Let [Def "a" (Lit (LInt 1))]
+                 (If (Lit (LBool True)) 
+                     (Let [Def "b" (Lit (LInt 2))]
+                          (If (Lit (LBool True)) (Op Add (Var "a") (Var "b")) (Lit (LInt 3)))) 
+                     (Lit (LInt 2))))
+            @?= ( Map.fromList
+                    [ ("_", Scope)
+                    , ("a", Expression (DLit (DInt 1)))
+                    , ("b", Expression (DLit (DInt 2)))
+                    , ("_x0", Conditional (DLit (DBool True)))
+                    , ("_1", Scope)
+                    , ("_x2", Conditional (DLit (DBool True)))
+                    , ("_3", Scope)
+                    , ("_x4", Expression (DOp Add (DVar "a") (DVar "b")))
+                    , ("_5", Scope)
+                    , ("_x6", Expression (DLit (DInt 3)))
+                    , ("_7", Scope)
+                    , ("_x8", Expression (DLit (DInt 2)))
+                    ]
+                , Set.fromList
+                    [ ("_", "a", Dep)
+                    , ("a", "_x0", Dep)
+                    , ("_x0", "_1", DepThen)
+                    , ("_x0", "_7", DepElse)
+                    , ("_1", "b", Dep)
+                    , ("b", "_x2", Dep)
+                    , ("_x2", "_3", DepThen)
+                    , ("_3", "_x4", Dep)
+                    , ("_x2", "_5", DepElse)
+                    , ("_5", "_x6", Dep)
+                    , ("_7", "_x8", Dep)
                     ]
                 )
     ]
