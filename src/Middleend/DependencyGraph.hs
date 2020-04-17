@@ -228,6 +228,19 @@ setupExpressionNode name dexpr = do
     setupDependencies name dexpr
 
 
+-- buildOpExpr combines several operations expressions so that they will
+-- appear as a single node, avoiding nodes for each bracketing
+-- as in e.g. ((x + y) + z) + w causing 3 nodes
+buildOpExpr :: Expr -> State FunctionState DExpr
+buildOpExpr (Op op e1 e2)
+    = case (atomicToDExpr e1, atomicToDExpr e2) of
+        (Nothing, Nothing)   -> DOp op <$> buildOpExpr e1 <*> buildOpExpr e2
+        (Just de1, Nothing)  -> DOp op de1 <$> buildOpExpr e2
+        (Nothing, Just de2)  -> DOp op <$> buildOpExpr e1 <*> return de2
+        (Just de1, Just de2) -> return $ DOp op de1 de2
+buildOpExpr e
+    = buildExpr e
+
 -- buildExpr converts atomics to expressions, builds nodes for non-atomics
 buildExpr :: Expr -> State FunctionState DExpr
 buildExpr e
@@ -257,11 +270,11 @@ buildGraph (Var var) = do
     -- TODO: some way of determining whether this is actually someFunc/0
     setupExpressionNode name (DVar var)
     return name
-buildGraph (Op op e1 e2) = do
+buildGraph e @ (Op op e1 e2) = do
     name <- depName
-    -- TODO: a + b + c, where none are atomic, but will return a var if built separately
-    -- can we combine them into a single expr???
-    dexpr <- DOp op <$> buildExpr e1 <*> buildExpr e2
+    -- operations are atomic, and will be the combination of multiple atomic
+    -- expressions or already-calculated Vars, so we can combine them
+    dexpr <- buildOpExpr e
     setupExpressionNode name dexpr
     return name
 buildGraph e @ App{} = do
