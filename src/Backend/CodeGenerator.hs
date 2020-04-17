@@ -22,20 +22,27 @@ import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
 
 -- NOTE:
--- We use specific functions instead of a custom instance of Show so that
--- we can clearly see the output of different stages of the pipeline when
--- printed to the console, rather than the eventual code generated
+-- We use specific functions instead of a custom instance of Show so that we
+-- can clearly see the output of different stages of the pipeline when printed
+-- to the console when testing functions individually, rather than the eventual
+-- code generated
 
 type Code = String
 
+-- header gives the imports for the parallelisation functions
 header = "import Control.Parallel\nimport Control.Parallel.Strategies"
 
+-- encode translates each encoding instruction into code
 encode :: EncodingInstructionTable -> Code
 encode 
     = intercalate "\n\n" . (:) header . map encode' . Map.toList
     where
+        -- encoding the type signature
         typeSignature n = Maybe.maybe "" 
-                            ((++) (n ++ " :: ") . flip (++) "\n" . signatureToCode)
+                            ((++) (n ++ " :: ") 
+                            . flip (++) "\n" 
+                            . signatureToCode)
+        -- encoding the definition signature
         definition    = (flip (++) " = " .) . (unwords .) . (:)
         encode' :: (Name, EncodingInstruction) -> Code
         encode' (name, Sequential mts params e)
@@ -76,6 +83,8 @@ defToCode :: Def -> Code
 defToCode (Def n e)
     = n ++ " = " ++ exprToCode e
 
+-- (aids readability in the final code by minimising the amount of
+-- parenthesises around each expression, while ensuring correctness)
 parenthesisedExprToCode :: Expr -> Code
 parenthesisedExprToCode l @ Lit{}
     = exprToCode l
@@ -183,7 +192,6 @@ getBranch p t = do
 
 -- satisifiedChildren returns the children of the given node whose 
 -- dependencies are met, i.e. their code has been generated.
--- TODO: consider dependency on scope, must be inside scope to generate!!! -- handled by new graph?
 satisfiedChildren :: Name -> State GenerationState [Name]
 satisfiedChildren name = do
     (_, gns, _) <- get

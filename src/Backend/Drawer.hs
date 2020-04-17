@@ -15,7 +15,8 @@ import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-
+-- graphToDot translates a dependency graph into text representing its
+-- GraphViz graph
 graphToDot :: DependencyGraph -> TL.Text
 graphToDot (ns, ds)
     = G.printDotGraph dotGraph
@@ -24,7 +25,8 @@ graphToDot (ns, ds)
             (Set.toList ds)
 
 
--- Parameters for GraphViz
+-- depGraphParams sets up the parameters for the GraphViz graph to be drawn
+-- with the correct annotations, etc
 depGraphParams :: G.GraphvizParams Name DNode DType () DNode
 depGraphParams = G.defaultParams {
     G.fmtNode = \(name, node) -> case node of
