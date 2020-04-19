@@ -13,6 +13,8 @@ import qualified Data.Set as Set
 import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
 
+import Debug.Trace (trace)
+
 type DependencyGraph = (NodeTable, Dependencies)
 type NodeTable = Map Name DNode
 type Dependencies = Set Dependency
@@ -176,8 +178,10 @@ depName = do
     put (graph, params, counter + 1, scope)
     return name
 
--- atomicToDExpr returns a DExpr if the expression is atomic,
--- or Nothing otherwise
+
+-- atomicToDExpr returns a DExpr if the expression is atomic, else Nothing
+-- atomic function calls are handled separately in buildExpr because they may
+-- contain non-atomic arguments which need nodes to be built
 atomicToDExpr :: Expr -> Maybe DExpr
 atomicToDExpr (Lit (LInt i))
     = return $ DLit (DInt i)
@@ -228,6 +232,16 @@ setupExpressionNode name dexpr = do
     setupDependencies name dexpr
 
 
+-- collectApp returns the name of the function being called, and all the
+-- expressions being passed as arguments from an App expression
+collectApp :: Expr -> (Name, [Expr])
+collectApp (App (Var name) e)
+    = (name, [e])
+collectApp (App e1 e2)
+    = (name, es ++ [e2])
+    where (name, es) = collectApp e1
+
+
 -- buildOpExpr combines several operations expressions so that they will
 -- appear as a single node, avoiding nodes for each bracketing
 -- as in e.g. ((x + y) + z) + w causing 3 nodes
@@ -241,18 +255,40 @@ buildOpExpr (Op op e1 e2)
 buildOpExpr e
     = buildExpr e
 
+-- isAtomicFunction returns True if the given name is the name of an atomic
+-- function, i.e. a O(1) in-built function
+-- NOTE: incomplete list of functions
+isAtomicFunction :: Name -> Bool
+isAtomicFunction
+    = flip elem ["null", "head", "tail"]
+
 -- buildExpr converts atomics to expressions, builds nodes for non-atomics
 buildExpr :: Expr -> State FunctionState DExpr
 buildExpr e
-    = Maybe.maybe (DVar <$> buildGraph e)
-        return
-        (atomicToDExpr e)
+    = case (atomicToDExpr e, e) of
+        -- if atomic, then can just return dexpr for embedding
+        (Just de, _)    -> return de
+        (_, e' @ App{}) -> do
+            let (fName, args) = collectApp e
+            if isAtomicFunction fName
+                -- if the function is atomic, then can just return dexpr
+                -- for embedding
+                then DApp fName <$> mapM buildExpr args
+                -- otherwise, build the node as usual
+                else buildNode
+        -- if not atomic, build the node
+        _               -> buildNode
+    where buildNode = DVar <$> buildGraph e
 
+
+-- buildGraph builds a node for the given expression with a unique
+-- generated name
 buildGraph :: Expr -> State FunctionState Name
 buildGraph = buildGraphWithName Nothing
 
--- buildGraph builds a node for the given expression, returning the name of the
--- identifier used for the node
+
+-- buildGraphWithName builds a node for the given expression with the name if
+-- provided, otherwise a unique generated name, returning the name of the node
 buildGraphWithName :: Maybe Name -> Expr -> State FunctionState Name
 buildGraphWithName mn (Lit lit) = do
     name <- Maybe.maybe depName return mn
@@ -273,7 +309,7 @@ buildGraphWithName mn (Var var) = do
     -- TODO: some way of determining whether this is actually someFunc/0
     setupExpressionNode name (DVar var)
     return name
-buildGraphWithName mn e @ (Op op e1 e2) = do
+buildGraphWithName mn e @ Op{} = do
     name <- Maybe.maybe depName return mn
     -- operations are atomic, and will be the combination of multiple atomic
     -- expressions or already-calculated Vars, so we can combine them
@@ -284,12 +320,6 @@ buildGraphWithName mn e @ App{} = do
     name <- Maybe.maybe depName return mn
     -- collect the name of the function and its given arguments
     let (fName, args) = collectApp e
-        collectApp :: Expr -> (Name, [Expr])
-        collectApp (App (Var name) e)
-            = (name, [e])
-        collectApp (App e1 e2)
-            = (name, es ++ [e2])
-            where (name, es) = collectApp e1
     -- build the nodes for the arguments
     dexpr <- DApp fName <$> mapM buildExpr args
     -- setup this node

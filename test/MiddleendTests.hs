@@ -553,4 +553,35 @@ createDependencyGraphTests = testGroup "createDependencyGraph test"
                     , ("b", "_x0", Dep)
                     ]
             )
+    , testCase "atomic function calls do not create new nodes" $
+        createDependencyGraph ["n"]
+            (Op Add
+                (Op Add
+                    (App 
+                        (App 
+                            (Var "schwoop") 
+                            (App 
+                                (Var "head")
+                                (App (App (App (Var "foo") (Lit (LInt 1))) (Lit (LInt 2))) (Lit (LInt 3)))))
+                        (App (App (App (Var "scoop") (Lit (LInt 1))) (Lit (LInt 2))) (Lit (LInt 3))))
+                    (App (Var "head") (Lit (LList [Lit (LInt 1), Lit (LInt 2), Lit (LInt 3)]))))
+                (App (Var "head") (App (Var "bar") (Lit (LInt 1)))))
+            @?= ( Map.fromList
+                    [ ("_", Scope)
+                    , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DApp "head" [DLit (DList [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)])])) (DApp "head" [DVar "_x4"])))
+                    , ("_x1", Expression (DApp "schwoop" [DApp "head" [DVar "_x2"], DVar "_x3"]))
+                    , ("_x2", Expression (DApp "foo" [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)]))
+                    , ("_x3", Expression (DApp "scoop" [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)]))
+                    , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                    ]
+                , Set.fromList
+                    [ ("_", "_x2", Dep)
+                    , ("_", "_x3", Dep)
+                    , ("_", "_x4", Dep)
+                    , ("_x2", "_x1", Dep)
+                    , ("_x3", "_x1", Dep)
+                    , ("_x4", "_x0", Dep)
+                    , ("_x1", "_x0", Dep)
+                    ]
+                )
     ]
