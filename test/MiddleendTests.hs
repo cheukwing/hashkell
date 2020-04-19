@@ -191,14 +191,14 @@ ensureNoUnusedDefsTests = testGroup "ensureNoUsedDefs tests"
     ]
 
 defnWithBranch
-    = Op Add (App (Var "foo") (Lit (LInt 1))) (App (Var "bar") (Lit (LInt 2)))
+    = Op Add (App (Var "meep") (Lit (LInt 1))) (App (Var "beep") (Lit (LInt 2)))
 functionWithBranch
     = Just (["n"], defnWithBranch)
 graphWithBranch
     = ( Map.fromList 
         [ ("_", Scope)
-        , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
-        , ("_x2", Expression (DApp "bar" [DLit (DInt 2)]))
+        , ("_x1", Expression (DApp "meep" [DLit (DInt 1)]))
+        , ("_x2", Expression (DApp "beep" [DLit (DInt 2)]))
         , ("_x0", Expression (DOp Add (DVar "_x1") (DVar "_x2")))
         ]
       , Set.fromList
@@ -299,6 +299,46 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
                     ))
         , ("bar_seq", Sequential Nothing ["n"] defnWithBranch)
         , ("bar_par", Parallel Nothing ["n"] graphWithBranch)
+        ]
+    , testCase "replaces recursive calls with the sequential branch, in the sequential branch" $
+        createEncodingInstructionTable 100 (Map.fromList
+        [ ( "foo"
+          , ( Just (Polynomial "n" 2)
+            , Just [Int, Int]
+            , Just (["n"], Op Add 
+                (App (Var "foo") (Lit (LInt 1))) 
+                (App (Var "beep") (Lit (LInt 2))))
+            ) 
+          )
+        ])
+        @?= Map.fromList 
+        [ ("foo", Sequential (Just [Int, Int]) ["n"] 
+                    (If (Op GTE (Var "n") (Lit (LInt 10))) 
+                        (App (Var "foo_par") (Var "n"))
+                        (App (Var "foo_seq") (Var "n")) 
+                    ))
+        , ("foo_seq", Sequential (Just [Int, Int]) 
+                        ["n"] 
+                        (Op Add 
+                            (App (Var "foo_seq") (Lit (LInt 1))) 
+                            (App (Var "beep") (Lit (LInt 2)))))
+        , ( "foo_par"
+          , Parallel (Just [Int, Int])
+                ["n"]
+                ( Map.fromList 
+                    [ ("_", Scope)
+                    , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                    , ("_x2", Expression (DApp "beep" [DLit (DInt 2)]))
+                    , ("_x0", Expression (DOp Add (DVar "_x1") (DVar "_x2")))
+                    ]
+                , Set.fromList
+                    [ ("_", "_x1", Dep)
+                    , ("_", "_x2", Dep)
+                    , ("_x1", "_x0", Dep)
+                    , ("_x2", "_x0", Dep)
+                    ]
+                )
+          )
         ]
     ]
 
