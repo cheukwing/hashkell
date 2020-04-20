@@ -7,6 +7,9 @@ import Middleend.DependencyGraph
 import Prelude hiding (GT)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.List (partition)
 
 type Steps = Int
 data ParallelisationType
@@ -122,3 +125,47 @@ replaceRecursiveCalls n (If e1 e2 e3)
     = If (replaceRecursiveCalls n e1) 
         (replaceRecursiveCalls n e2)
         (replaceRecursiveCalls n e3)
+
+
+-- hasParallelism checks if there are any parallel computations from the
+-- DependencyGraph built from a function definition, i.e. any node with more
+-- than one Dep arc
+-- NOTE: the use of let definitions, e.g.
+--           Scope
+--          /     \
+--      a = 1     b = 1
+--          \    /
+--          a + b
+-- will appear as parallelism, even though there calculations are atomic
+-- due to the limitations of the dependency graph
+hasParallelism :: DependencyGraph -> Bool
+hasParallelism (ns, ds)
+    = hasParallelism' "_"
+    where
+        hasParallelism' :: Name -> Bool
+        hasParallelism' n
+            = case ns Map.! n of
+                Conditional{}
+                    -- branching from non-scope children
+                    | length exps > 1  -> True
+                    -- if no non-scope children, then just check scopes
+                    | null exps        -> scopesArePar
+                    -- if one non-scope child, check scopes and that child
+                    | length exps == 1 -> scopesArePar || expIsPar
+                    where
+                        expIsPar       = hasParallelism' (head exps)
+                        scopesArePar   = any hasParallelism' scopes
+                        (scopes, exps) = (\(a, b) -> (map fst a, map fst b)) $
+                            partition (\(_, t) -> t == DepThen || t == DepElse)
+                                allChildren
+                        allChildren    = Set.toList 
+                            $ Set.map (\(_, c, t) -> (c, t))
+                            $ Set.filter (\(p, _, _) -> p == n) ds
+                _  -- otherwise if not Conditional node
+                    | null children       -> False
+                    | length children > 1 -> True
+                    | otherwise           -> hasParallelism' (head children)
+                    where
+                        children = Set.toList 
+                            $ Set.map (\(_, c, _) -> c)
+                            $ Set.filter (\(p, _, _) -> p == n) ds
