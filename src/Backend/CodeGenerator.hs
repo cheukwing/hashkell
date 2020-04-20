@@ -3,6 +3,7 @@ module Backend.CodeGenerator where
 import Simple.Syntax
 import Middleend 
     ( DependencyGraph
+    , Dependency
     , EncodingInstructionTable
     , EncodingInstruction(..)
     , DNode(..)
@@ -159,43 +160,62 @@ dexprToCode (DOp op e1 e2)
 
 type GeneratedNames = Set Name
 type ParallelisedScope = Bool
-type GenerationState = (DependencyGraph, GeneratedNames, ParallelisedScope)
+
+data GenerationState 
+    = SequentialEnc DependencyGraph GeneratedNames
+    | SimpleParallelEnc DependencyGraph GeneratedNames ParallelisedScope
+
+getDependencies :: State GenerationState (Set Dependency)
+getDependencies = do
+    s <- get
+    return $ case s of
+        SequentialEnc (_, ds) _       -> ds
+        SimpleParallelEnc (_, ds) _ _ -> ds
+
+getGeneratedNames :: State GenerationState GeneratedNames
+getGeneratedNames = do
+    s <- get
+    return $ case s of
+        SequentialEnc _ gn       -> gn
+        SimpleParallelEnc _ gn _ -> gn
+
+getNodeTable :: State GenerationState (Map Name DNode)
+getNodeTable = do
+    s <- get
+    return $ case s of
+        SequentialEnc (ns, _) _       -> ns
+        SimpleParallelEnc (ns, _) _ _ -> ns
 
 -- getChildren returns a set of all children of the given node, except those
 -- with conditional dependencies.
 getChildren :: Name -> State GenerationState (Set Name)
-getChildren n = do
-    ((_, ds), _, _) <- get
-    return $ 
-        Set.map (\(_, c, _) -> c) $
-        Set.filter (\(p, _, t) -> p == n && t == Dep) ds
+getChildren n =
+    Set.map (\(_, c, _) -> c) .
+        Set.filter (\(p, _, t) -> p == n && t == Dep) <$> getDependencies
 
 
 -- getParents returns a set of all parents of the given node, except those
 -- with conditional dependencies.
 getParents :: Name -> State GenerationState (Set Name)
-getParents n = do
-    ((_, ds), _, _) <- get
-    return $ 
-        Set.map (\(p, _, _) -> p) $
-        Set.filter (\(_, c, t) -> c == n && t == Dep) ds
+getParents n =
+    Set.map (\(p, _, _) -> p) .
+        Set.filter (\(_, c, t) -> c == n && t == Dep) <$> getDependencies
 
 
 -- getBranch finds the name of the node which is a branch of the given node
 -- and has the given dependency type. Used for finding the conditional
 -- dependencies, and not for regular dependencies.
 getBranch :: Name -> DType -> State GenerationState Name
-getBranch p t = do
-    ((_, ds), _, _) <- get
-    let bs = Set.filter (\(p', _, t') -> p == p' && t == t') ds
-    return $ ((\(_, c, _) -> c) . Set.elemAt 0) bs
+getBranch p t =
+    ((\(_, c, _) -> c) . Set.elemAt 0) .
+        Set.filter (\(p', _, t') -> p == p' && t == t') <$> getDependencies
 
 
 -- satisifiedChildren returns the children of the given node whose 
 -- dependencies are met, i.e. their code has been generated.
 satisfiedChildren :: Name -> State GenerationState [Name]
 satisfiedChildren name = do
-    (_, gns, _) <- get
+    gns <- getGeneratedNames
     children <- Set.toList <$> getChildren name
     cps <- zip children <$> mapM getParents children
     return [c | (c, ps) <- cps, Set.isSubsetOf ps gns]
@@ -203,26 +223,31 @@ satisfiedChildren name = do
 
 -- getNode retrieves the node with the given name.
 getNode :: Name -> State GenerationState DNode
-getNode name = do
-    ((ns, _), _, _) <- get
-    return (ns Map.! name)
+getNode name =
+    flip (Map.!) name <$> getNodeTable
 
 
 -- updateGeneratedNames records that a node with the given name has had its
 -- code generated.
 updateGeneratedNames :: Name -> State GenerationState ()
 updateGeneratedNames gn = do
-    (g, gns, par) <- get
-    put (g, Set.insert gn gns, par)
+    s <- get
+    case s of
+        SequentialEnc dg gns 
+            -> put (SequentialEnc dg (Set.insert gn gns))
+        SimpleParallelEnc dg gns par
+            -> put (SimpleParallelEnc dg (Set.insert gn gns) par)
 
 
 -- graphToCode generates code from the given dependency graph,
 -- either encoding it sequentially if False, else parallelised.
 graphToCode :: DependencyGraph -> Bool -> Code
 graphToCode g False
-    = snd $ evalState (graphToSequentialCode "_") (g, Set.empty, False)
+    = snd $ evalState (graphToSequentialCode "_") 
+        (SequentialEnc g Set.empty)
 graphToCode g True
-    = snd $ evalState (graphToParallelCode "_") (g, Set.empty, False)
+    = snd $ evalState (graphToParallelCodeSimple "_")
+        (SimpleParallelEnc g Set.empty False)
 
 
 graphToSequentialCode :: Name -> State GenerationState (Name, Code)
@@ -265,17 +290,18 @@ graphToSequentialCode name = do
 -- in the graph should generate parallel code.
 setParallelisedScope :: Bool -> State GenerationState Bool
 setParallelisedScope par = do
-    (g, gns, par') <- get
-    put (g, gns, par)
-    return par'
-
+    s <- get
+    case s of
+        SimpleParallelEnc dg gns par' ->
+            put (SimpleParallelEnc dg gns par) >> return par'
 
 -- getParallelisedScope retrieves the bool determining whether the current code
 -- in the current scope in the graph should be parallelised.
 getParallelisedScope :: State GenerationState Bool
 getParallelisedScope = do
-    (_, _, par) <- get
-    return par
+    s <- get
+    case s of
+        SimpleParallelEnc _ _ par -> return par
 
 
 -- scopeContainsParallelism returns whether the current scope in the graph
@@ -298,12 +324,12 @@ scopeContainsParallelism start =
                     -> scopeContainsParallelism name
 
     
-graphToParallelCode :: Name -> State GenerationState (Name, Code)
-graphToParallelCode name = do
+graphToParallelCodeSimple :: Name -> State GenerationState (Name, Code)
+graphToParallelCodeSimple name = do
     updateGeneratedNames name
     node <- getNode name
     let generateChildren = do
-            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCode)
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeSimple)
             let mLastName = if null lns then Nothing else Just (last lns)
             return (mLastName, intercalate "; " cs)
     case node of
@@ -331,8 +357,8 @@ graphToParallelCode name = do
                 Just lastName -> return (lastName, expCode ++ "; " ++ code)
                 Nothing       -> return (name, expCode)
         Conditional e -> do
-            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCode
-            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCode
+            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeSimple
+            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeSimple
             (mLastName, code) <- generateChildren
             par <- getParallelisedScope
             let condCode = name ++ " = if " ++ dexprToCode e 

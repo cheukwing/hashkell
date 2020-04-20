@@ -1,5 +1,6 @@
 module Middleend (
     Middleend.DependencyGraph.DependencyGraph,
+    Middleend.DependencyGraph.Dependency,
     Middleend.DependencyGraph.DNode(..),
     Middleend.DependencyGraph.DType(..),
     Middleend.DependencyGraph.DExpr(..),
