@@ -4,6 +4,7 @@ module Middleend (
     Middleend.DependencyGraph.DType(..),
     Middleend.DependencyGraph.DExpr(..),
     Middleend.DependencyGraph.DLit(..),
+    Middleend.DependencyGraph.isAtomicFunction,
     Middleend.Paralleliser.EncodingInstructionTable,
     Middleend.Paralleliser.EncodingInstruction(..),
     pipeline

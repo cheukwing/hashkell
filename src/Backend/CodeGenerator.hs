@@ -9,6 +9,7 @@ import Middleend
     , DType(..)
     , DExpr(..)
     , DLit(..)
+    , isAtomicFunction
     )
 
 import Prelude hiding (EQ, LT, GT)
@@ -289,11 +290,12 @@ scopeContainsParallelism start =
         scopeContainsParallelism' name = do
             node <- getNode name
             case node of
-                Scope              -> return False
-                Expression DApp{}  -> return True
-                Conditional DApp{} -> return True
-                _                  ->
-                    or <$> (Set.toList <$> getChildren name >>= mapM scopeContainsParallelism')
+                Scope                      
+                    -> return False
+                Expression (DApp fName _)
+                    -> return $ not (isAtomicFunction fName)
+                _
+                    -> scopeContainsParallelism name
 
     
 graphToParallelCode :: Name -> State GenerationState (Name, Code)
