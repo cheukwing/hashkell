@@ -10,7 +10,13 @@ import qualified Data.Map.Strict as Map
 import Simple.Syntax
 import Frontend (Cplx(..))
 import Middleend.Cleaner (ensureUniqueNames, ensureNoUnusedDefs)
-import Middleend.Paralleliser (parallelisationType, ParallelisationType(..), EncodingInstruction(..), createEncodingInstructionTable)
+import Middleend.Paralleliser 
+    ( parallelisationType
+    , ParallelisationType(..)
+    , EncodingInstruction(..)
+    , createEncodingInstructionTable
+    , hasParallelism
+    )
 import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..), createDependencyGraph)
 
 middleendTests :: TestTree
@@ -19,6 +25,7 @@ middleendTests = testGroup "Middleend Tests"
     , ensureNoUnusedDefsTests
     , parallelisationTypeTests
     , createEncodingInstructionTableTests
+    , hasParallelismTests
     , createDependencyGraphTests
     ]
 
@@ -342,7 +349,234 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         ]
     ]
 
-createDependencyGraphTests = testGroup "createDependencyGraph test"
+
+hasParallelismTests = testGroup "hasParallelism tests"
+    [ testCase "returns false in one node graph" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Expression (DOp Add (DLit (DInt 1)) (DLit (DInt 1))))
+                ]
+            , Set.fromList
+                [ ("_", "_x0", Dep)
+                ]
+            )
+        @?= False
+    , testCase "returns false in simple sequential graph" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_x0", Expression (DOp Add (DVar "_x1") (DLit (DInt 1))))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                ]
+            )
+        @?= False
+    , testCase "returns false in long sequential graph" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x7", Expression (DApp "foo" [DVar "_x8"]))
+                , ("_x6", Expression (DApp "foo" [DVar "_x7"]))
+                , ("_x5", Expression (DApp "foo" [DVar "_x6"]))
+                , ("_x4", Expression (DApp "foo" [DVar "_x5"]))
+                , ("_x3", Expression (DApp "foo" [DVar "_x4"]))
+                , ("_x2", Expression (DApp "foo" [DVar "_x3"]))
+                , ("_x1", Expression (DApp "foo" [DVar "_x2"]))
+                , ("_x0", Expression (DOp Add (DVar "_x1") (DLit (DInt 1))))
+                ]
+            , Set.fromList
+                [ ("_", "_x7", Dep)
+                , ("_x7", "_x6", Dep)
+                , ("_x6", "_x5", Dep)
+                , ("_x5", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x3", "_x2", Dep)
+                , ("_x2", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                ]
+            )
+        @?= False
+    , testCase "returns false for sequential graph with condition" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DLit (DInt 1))))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_5", Scope)
+                , ("_x6", Expression (DOp Add (DVar "_x7") (DLit (DInt 1))))
+                , ("_x7", Expression (DApp "baz" [DLit (DInt 1)]))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_5", DepElse)
+                , ("_5", "_x7", Dep)
+                , ("_x7", "_x6", Dep)
+                ]
+            )
+        @?= False
+    , testCase "returns false for sequential graph with condition as expression" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DLit (DInt 1))))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_5", Scope)
+                , ("_x6", Expression (DOp Add (DVar "_x7") (DLit (DInt 1))))
+                , ("_x7", Expression (DApp "baz" [DLit (DInt 1)]))
+                , ("_x8", Expression (DOp Add (DLit (DInt 1)) (DVar "_x0")))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_5", DepElse)
+                , ("_5", "_x7", Dep)
+                , ("_x7", "_x6", Dep)
+                , ("_x0", "_x8", Dep)
+                ]
+            )
+        @?= False
+    , testCase "returns true for simple graph with branch" $
+        hasParallelism graphWithBranch
+        @?= True
+    , testCase "returns true for graph with parallelism before conditional" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DVar "a", DVar "b"]))
+                , ("a", Expression (DApp "bionics" [DLit (DInt 1)]))
+                , ("b", Expression (DApp "tronics" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DLit (DInt 1))))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_5", Scope)
+                , ("_x6", Expression (DOp Add (DVar "_x7") (DLit (DInt 1))))
+                , ("_x7", Expression (DApp "baz" [DLit (DInt 1)]))
+                ]
+            , Set.fromList
+                [ ("_", "a", Dep)
+                , ("_", "b", Dep)
+                , ("a", "_x1", Dep)
+                , ("b", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_5", DepElse)
+                , ("_5", "_x7", Dep)
+                , ("_x7", "_x6", Dep)
+                ]
+            )
+        @?= True
+    , testCase "returns true for graph with parallelism inside one scope" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DLit (DInt 1))))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_5", Scope)
+                , ("_x6", Expression (DOp Add (DVar "_x7") (DVar "_x8")))
+                , ("_x7", Expression (DApp "baz" [DLit (DInt 1)]))
+                , ("_x8", Expression (DApp "baz" [DLit (DInt 1)]))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_5", DepElse)
+                , ("_5", "_x7", Dep)
+                , ("_5", "_x8", Dep)
+                , ("_x7", "_x6", Dep)
+                , ("_x8", "_x6", Dep)
+                ]
+            )
+        @?= True
+    , testCase "returns true for graph with parallelism inside both scopes" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DVar "_x5")))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_x5", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_6", Scope)
+                , ("_x7", Expression (DOp Add (DVar "_x8") (DVar "_x9")))
+                , ("_x8", Expression (DApp "baz" [DLit (DInt 1)]))
+                , ("_x9", Expression (DApp "baz" [DLit (DInt 1)]))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_2", "_x5", Dep)
+                , ("_x5", "_x3", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_6", DepElse)
+                , ("_6", "_x8", Dep)
+                , ("_6", "_x9", Dep)
+                , ("_x8", "_x7", Dep)
+                , ("_x9", "_x7", Dep)
+                ]
+            )
+        @?= True
+    , testCase "returns true for parallel graph with condition as expression" $
+        hasParallelism
+            ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Conditional (DVar "_x1"))
+                , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
+                , ("_2", Scope)
+                , ("_x3", Expression (DOp Add (DVar "_x4") (DLit (DInt 1))))
+                , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))
+                , ("_5", Scope)
+                , ("_x6", Expression (DOp Add (DVar "_x7") (DLit (DInt 1))))
+                , ("_x7", Expression (DApp "baz" [DLit (DInt 1)]))
+                , ("_x8", Expression (DOp Add (DVar "_x9") (DVar "_x0")))
+                , ("_x9", Expression (DApp "bong" [DLit (DInt 1)]))
+                ]
+            , Set.fromList
+                [ ("_", "_x1", Dep)
+                , ("_x1", "_x0", Dep)
+                , ("_x0", "_2", DepThen)
+                , ("_2", "_x4", Dep)
+                , ("_x4", "_x3", Dep)
+                , ("_x0", "_5", DepElse)
+                , ("_5", "_x7", Dep)
+                , ("_x7", "_x6", Dep)
+                , ("_x0", "_x8", Dep)
+                , ("_", "_x9", Dep)
+                , ("_x9", "_x8", Dep)
+                ]
+            )
+        @?= True
+    ]
+
+createDependencyGraphTests = testGroup "createDependencyGraph tests"
     [ testCase "create very basic graph" $
         createDependencyGraph [] (Lit (LInt 1))
             @?= ( Map.fromList 
