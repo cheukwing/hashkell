@@ -78,12 +78,12 @@ createEncodingInstructionTable steps
         -- If we have a complexity and definition, then assess whether it is
         -- worth parallelising, then add the relevant encoding instructions
         aggToInstr eit (name, agg @ (_, mts, Just (params, defn)))
-            = case parallelisationType steps agg of
-                Never -> -- Never parallelise, then encode sequentially
-                    Map.insert name (Sequential mts params defn) eit
-                Always -> -- Always parallelise, then encode parallel
+            = case (parallelisationType steps agg, hasParallelism dg) of
+                -- If should always parallelise, and parallelism exists
+                (Always, True) ->
                     Map.insert name par eit 
-                Branching bound -> -- Parallelise if the condition is met
+                -- If should branching parallelise, and parallelism exists
+                (Branching bound, True) ->
                     Map.insert seqName seq
                         $ Map.insert parName par
                         $ Map.insert name branchingCall eit
@@ -93,8 +93,10 @@ createEncodingInstructionTable steps
                         branchingCall = Sequential mts params
                             (If bound (callFunction parName)
                                 (callFunction seqName))
+                -- If should never parallelise, or no parallelism exists
+                (_, _) ->
+                    Map.insert name (Sequential mts params defn) eit
             where
-                -- TODO: dg analysis
                 dg             = createDependencyGraph params defn
                 seqName        = name ++ "_seq"
                 par            = Parallel mts params dg
