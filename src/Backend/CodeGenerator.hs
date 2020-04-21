@@ -306,24 +306,35 @@ getParallelisedScope = do
 
 
 -- scopeContainsParallelism returns whether the current scope in the graph
--- contains any nodes which should be generated in parallel, i.e. if it
--- contains any function calls.
--- TODO: do not parallelise if only one path
+-- contains parallel branches and non-atomic function calls, representing the
+-- potential for parallelism
 scopeContainsParallelism :: Name -> State GenerationState Bool
-scopeContainsParallelism start =
-    or <$> (Set.toList <$> getChildren start >>= mapM scopeContainsParallelism')
-    where 
-        scopeContainsParallelism' :: Name -> State GenerationState Bool
-        scopeContainsParallelism' name = do
-            node <- getNode name
+scopeContainsParallelism start
+    = (&&) <$> hasBranches start <*> hasFunctionCalls start
+    where
+        -- NOTE: recall that getChildren only considers Dep dependencies
+        -- check if this scope has branches
+        hasBranches :: Name -> State GenerationState Bool
+        hasBranches n = do
+            children <- getChildren n
+            if Set.null children
+                then return False
+                else if Set.size children > 1
+                    then return True
+                    else (hasBranches . head . Set.toList) children
+        -- check if this scope has function calls
+        hasFunctionCalls :: Name -> State GenerationState Bool
+        hasFunctionCalls n = do
+            node <- getNode n
+            let checkChildren = or <$> 
+                    (Set.toList <$> getChildren n >>= mapM hasFunctionCalls)
             case node of
-                Scope                      
-                    -> return False
-                Expression (DApp fName _)
-                    -> return $ not (isAtomicFunction fName)
-                _
-                    -> scopeContainsParallelism name
-
+                Expression (DApp fName _) -> 
+                    if isAtomicFunction fName
+                        then checkChildren
+                        else return True
+                _                         -> checkChildren
+                
 
     
 graphToParallelCodeSimple :: Name -> State GenerationState (Name, Code)
@@ -349,7 +360,7 @@ graphToParallelCodeSimple name = do
             (mLastName, code) <- generateChildren
             par <- getParallelisedScope
             let expCode = case (par, e) of
-                    (True, (DApp fName _)) ->
+                    (True, DApp fName _) ->
                         if isAtomicFunction fName
                             then "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                             else name ++ " <- rpar (" ++ dexprToCode e ++ ")"
