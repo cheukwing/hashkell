@@ -36,6 +36,7 @@ data DNode
 data DExpr
     = DApp Name [DExpr]
     | DAtomApp Name [DExpr]
+    | DHighApp Name DExpr [DExpr]
     | DOp BinOp DExpr DExpr
     | DVar Name
     | DLit DLit
@@ -51,35 +52,37 @@ data DLit
 type Params = [Name]
 type Counter = Int
 type CurrentScope = Name
-type FunctionState = (DependencyGraph, Params, Counter, CurrentScope)
+type MergeAtomic = Bool
+type FunctionState = (DependencyGraph, Params, Counter, CurrentScope, MergeAtomic)
 
 -- createDependencyGraph builds the dependency graph of a function with the
 -- given params and definition
-createDependencyGraph :: [Name] -> Expr -> DependencyGraph
-createDependencyGraph params defn
+createDependencyGraph :: [Name] -> Expr -> MergeAtomic -> DependencyGraph
+createDependencyGraph params defn ma
     = dg
     where
         initState     = ( (Map.fromList [("_", Scope)], Set.empty)
                         , params
                         , 0
                         , "_"
+                        , ma
                         )
-        (dg, _, _, _) = execState (buildGraph defn) initState
+        (dg, _, _, _, _) = execState (buildGraph defn) initState
 
 
 -- setScope sets the current scope to the given scope, and returns the previous
 -- scope in the state.
 setScope :: Name -> State FunctionState Name
 setScope s = do
-    (graph, params, counter, scope) <- get
-    put (graph, params, counter, s)
+    (graph, params, counter, scope, ma) <- get
+    put (graph, params, counter, s, ma)
     return scope
 
 
 -- hasParent checks if the node with the given name has any parent nodes.
 hasParent :: Name -> State FunctionState Bool
 hasParent name = do
-    ((_, ds), _, _, scope) <- get
+    ((_, ds), _, _, scope, _) <- get
     let dependencies = Set.filter (\(_, c, t) -> c == name && t == Dep) ds
     scopedPs <- filterM (\(p, _, _) -> p `isDescendentOf` scope) 
         (Set.toList dependencies)
@@ -89,15 +92,15 @@ hasParent name = do
 -- addArc inserts a dependency arc into the state
 addArc :: Dependency -> State FunctionState ()
 addArc d = do
-    ((ns, ds), params, counter, scope) <- get
-    put ((ns, Set.insert d ds), params, counter, scope)
+    ((ns, ds), params, counter, scope, ma) <- get
+    put ((ns, Set.insert d ds), params, counter, scope, ma)
 
 
 -- isDescendentOf checks if a is a descendent of b by recursively checking
 -- a's parents for b
 isDescendentOf :: Name -> Name -> State FunctionState Bool
 a `isDescendentOf` b = do
-    ((_, ds), _, _, _) <- get
+    ((_, ds), _, _, _, _) <- get
     let 
         pes = Set.filter (\(_, c, t) -> c == a && t == Dep) ds
         ps  = Set.toList $ Set.map (\(p, _, _) -> p) pes
@@ -111,19 +114,19 @@ a `isDescendentOf` b = do
 -- the dependencies are stored in a Set
 removeSimilarDependencies :: Name -> Name -> State FunctionState ()
 removeSimilarDependencies child parent = do
-    ((ns, ds), params, counter, scope) <- get
+    ((ns, ds), params, counter, scope, ma) <- get
     let similars = Set.toList $ Set.filter 
             (\(p, c, _) -> c == child && p /= parent)
             ds
     similars' <- Set.fromList 
         <$> filterM (\(p, _, _) -> parent `isDescendentOf` p) similars
-    put ((ns, Set.difference ds similars'), params, counter, scope)
+    put ((ns, Set.difference ds similars'), params, counter, scope, ma)
 
 
 -- addDependency adds an arc from parent to child into the state
 addDependency :: Name -> Name -> State FunctionState ()
 addDependency child parent = do
-    (graph, params, counter, scope) <- get
+    (graph, params, counter, scope, _) <- get
 --        addArc ("_", child, DepParam)
     let p = if parent `elem` params then scope else parent
     -- check if we already have the dependency, or it exists transitively
@@ -139,7 +142,7 @@ addDependency child parent = do
 -- child, if the child is not already a descendent of the scope
 addScopeDependency :: Name -> State FunctionState ()
 addScopeDependency child = do
-    (graph, params, counter, scope) <- get
+    (graph, params, counter, scope, _) <- get
     alreadyDescendent <- child `isDescendentOf` scope
     unless alreadyDescendent $ addArc (scope, child, Dep)
 
@@ -155,17 +158,17 @@ addConditionalDependency c t e = do
 -- addDependencyNode inserts a node with the given name into the state.
 addDependencyNode :: Name -> DNode -> State FunctionState ()
 addDependencyNode name node = do
-    ((ns, ds), params, counter, scope) <- get
-    put ((Map.insert name node ns, ds), params, counter, scope)
+    ((ns, ds), params, counter, scope, ma) <- get
+    put ((Map.insert name node ns, ds), params, counter, scope, ma)
 
 
 -- addScope inserts a scope node into the state using the current counter,
 -- increments the counter, then returns the generated name.
 addScope :: State FunctionState Name
 addScope = do
-    (graph, params, counter, scope) <- get
+    (graph, params, counter, scope, ma) <- get
     let name = "_" ++ show counter
-    put (graph, params, counter + 1, scope)
+    put (graph, params, counter + 1, scope, ma)
     addDependencyNode name Scope
     return name
 
@@ -174,9 +177,9 @@ addScope = do
 -- value, then increments it for next use
 depName :: State FunctionState Name
 depName = do
-    (graph, params, counter, scope) <- get
+    (graph, params, counter, scope, ma) <- get
     let name = "_x" ++ show counter
-    put (graph, params, counter + 1, scope)
+    put (graph, params, counter + 1, scope, ma)
     return name
 
 
@@ -217,6 +220,8 @@ dependenciesFromDExpr (DApp _ es)
     = concatMap dependenciesFromDExpr es
 dependenciesFromDExpr (DAtomApp _ es)
     = concatMap dependenciesFromDExpr es
+dependenciesFromDExpr (DHighApp _ e es)
+    = dependenciesFromDExpr e ++ concatMap dependenciesFromDExpr es
 
 -- setupDependencies adds all the dependencies for a node with the given name
 -- and DExpr
@@ -267,21 +272,25 @@ isAtomicFunction
 
 -- buildExpr converts atomics to expressions, builds nodes for non-atomics
 buildExpr :: Expr -> State FunctionState DExpr
-buildExpr e
-    = case (atomicToDExpr e, e) of
-        -- if atomic, then can just return dexpr for embedding
-        (Just de, _)    -> return de
-        (_, e' @ App{}) -> do
-            let (fName, args) = collectApp e
-            if isAtomicFunction fName
-                -- if the function is atomic, then can just return dexpr
-                -- for embedding
-                then DAtomApp fName <$> mapM buildExpr args
-                -- otherwise, build the node as usual
-                else buildNode
-        -- if not atomic, build the node
-        _               -> buildNode
-    where buildNode = DVar <$> buildGraph e
+buildExpr e = do
+    (_, _, _, _, ma) <- get
+    if not ma
+        then DVar <$> buildGraph e
+        else 
+            case (atomicToDExpr e, e) of
+                -- if atomic, then can just return dexpr for embedding
+                (Just de, _)    -> return de
+                (_, e' @ App{}) -> do
+                    let (fName, args) = collectApp e
+                    if isAtomicFunction fName
+                        -- if the function is atomic, then can just return dexpr
+                        -- for embedding
+                        then DAtomApp fName <$> mapM buildExpr args
+                        -- otherwise, build the node as usual
+                        else buildNode
+                -- if not atomic, build the node
+                _               -> buildNode
+            where buildNode = DVar <$> buildGraph e
 
 
 -- buildGraph builds a node for the given expression with a unique
@@ -322,12 +331,17 @@ buildGraphWithName mn e @ Op{} = do
 buildGraphWithName mn e @ App{} = do
     name <- Maybe.maybe depName return mn
     -- collect the name of the function and its given arguments
-    let (fName, args) = collectApp e
+    let (fName, args @ (a : as)) = collectApp e
     -- build the nodes for the arguments
-    argExprs <- mapM buildExpr args
-    let dexpr = if isAtomicFunction fName
-        then DAtomApp fName argExprs
-        else DApp fName argExprs
+    dexpr <- if isAtomicFunction fName
+        then DAtomApp fName <$> mapM buildExpr args
+        else if fName `elem` ["map", "zipWith"]
+            then do
+                let (fName', args') = case a of 
+                        App{} -> collectApp a 
+                        Var n ->  (n, [])
+                DHighApp fName <$> (DApp fName' <$> mapM buildExpr args') <*> mapM buildExpr as
+            else DApp fName <$> mapM buildExpr args
     -- setup this node
     setupExpressionNode name dexpr
     return name
@@ -359,14 +373,14 @@ buildGraphWithName mn (If e1 e2 e3) = do
         -- to link to the Condition node we are currently generating, ensuring
         -- that there are no inter-scope connections
         rearrangeExternalDependencies = do
-            ((ns, ds), params, counter, scope) <- get
+            ((ns, ds), params, counter, scope, ma) <- get
             internal <- internalNodes scope
             let externalDeps = Set.filter 
                     (\(p, c, _) -> Set.member c internal 
                         && Set.notMember p internal)
                     ds
                 ds' = Set.difference ds externalDeps
-            put ((ns, ds'), params, counter, scope)
+            put ((ns, ds'), params, counter, scope, ma)
             mapM_ (\(p, _, _) -> addDependency name p) (Set.toList externalDeps)
     -- setup branches
     thenScope <- buildBranch e2
@@ -380,7 +394,7 @@ buildGraphWithName mn (If e1 e2 e3) = do
 -- given node
 internalNodes :: Name -> State FunctionState (Set Name)
 internalNodes name = do
-    ((_, ds), _, _, _) <- get
+    ((_, ds), _, _, _, _) <- get
     let bfs :: Set Name -> [Name] -> Set Name
         bfs visited  [] 
             = visited

@@ -97,7 +97,7 @@ createEncodingInstructionTable steps
                 (_, _) ->
                     Map.insert name (Sequential mts params defn) eit
             where
-                dg             = createDependencyGraph params defn
+                dg             = createDependencyGraph params defn True
                 seqName        = name ++ "_seq"
                 par            = Parallel mts params dg
                 parName        = name ++ "_par"
@@ -163,6 +163,9 @@ hasParallelism (ns, ds)
                         allChildren    = Set.toList 
                             $ Set.map (\(_, c, t) -> (c, t))
                             $ Set.filter (\(p, _, _) -> p == n) ds
+
+                Expression DHighApp{} -> True
+
                 _  -- otherwise if not Conditional node
                     | null children       -> False
                     | length children > 1 -> True

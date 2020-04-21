@@ -154,6 +154,8 @@ dexprToCode (DApp n es)
     = unwords (n : map parenthesisedDExprToCode es)
 dexprToCode (DAtomApp n es)
     = unwords (n : map parenthesisedDExprToCode es)
+dexprToCode (DHighApp n f es)
+    = unwords (n : map parenthesisedDExprToCode (f : es))
 dexprToCode (DOp op e1 e2)
     = parenthesisedDExprToCode e1 
         ++ " " ++ opToCode op ++ " "
@@ -311,7 +313,7 @@ getParallelisedScope = do
 -- potential for parallelism
 scopeContainsParallelism :: Name -> State GenerationState Bool
 scopeContainsParallelism start
-    = (&&) <$> hasBranches start <*> hasFunctionCalls start
+    = (||) <$> hasHigherOrderFunctionCalls start <*> ((&&) <$> hasBranches start <*> hasFunctionCalls start)
     where
         -- NOTE: recall that getChildren only considers Dep dependencies
         -- check if this scope has branches
@@ -332,7 +334,15 @@ scopeContainsParallelism start
             case node of
                 Expression DApp{} -> return True
                 _                 -> checkChildren
-                
+        hasHigherOrderFunctionCalls :: Name -> State GenerationState Bool
+        hasHigherOrderFunctionCalls n = do
+            node <- getNode n
+            let checkChildren = or <$> 
+                    (Set.toList <$> getChildren n 
+                        >>= mapM hasHigherOrderFunctionCalls)
+            case node of
+                Expression DHighApp{} -> return True
+                _                     -> checkChildren
 
     
 graphToParallelCodeSimple :: Name -> State GenerationState (Name, Code)
@@ -360,6 +370,8 @@ graphToParallelCodeSimple name = do
             let expCode = case (par, e) of
                     (True, DApp{}) ->
                         name ++ " <- rpar (" ++ dexprToCode e ++ ")"
+                    (True, DHighApp{}) ->
+                        name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
                     (True, _)        ->
                         "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     _                ->

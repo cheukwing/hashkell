@@ -578,7 +578,7 @@ hasParallelismTests = testGroup "hasParallelism tests"
 
 createDependencyGraphTests = testGroup "createDependencyGraph tests"
     [ testCase "create very basic graph" $
-        createDependencyGraph [] (Lit (LInt 1))
+        createDependencyGraph [] (Lit (LInt 1)) True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DLit (DInt 1)))
@@ -586,7 +586,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 , Set.fromList [("_", "_x0", Dep)]
                 )
     , testCase "create very basic graph with argument" $
-        createDependencyGraph ["n"] (Var "n")
+        createDependencyGraph ["n"] (Var "n") True
             @?= ( Map.fromList 
                     [("_", Scope), ("_x0", Expression (DVar "n"))]
                 , Set.fromList 
@@ -595,7 +595,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create atomic binary operation graph" $
-        createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3)))
+        createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3))) True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DOp Add (DLit (DInt 1)) (DLit (DInt 2))) (DLit (DInt 3))))
@@ -603,7 +603,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 , Set.fromList [("_", "_x0", Dep)]
                 )
     , testCase "create binary operation graph" $
-        createDependencyGraph ["n"] (Op Add (Var "n") (Lit (LInt 3)))
+        createDependencyGraph ["n"] (Op Add (Var "n") (Lit (LInt 3))) True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DVar "n") (DLit (DInt 3))))
@@ -614,7 +614,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create function application graph" $
-        createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1))))
+        createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1)))) True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DApp "someFunc" [DVar "n", DOp Add (DLit (DInt 1)) (DLit (DInt 1))]))
@@ -631,6 +631,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                  ] 
                  (Op Add (Var "a") (Var "n"))
             )
+            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -651,6 +652,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                  ] 
                  (Op Add (Var "n") (Var "a"))
             )
+            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -669,6 +671,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 (Lit (LInt 2))
                 (App (Var "foobar") (Op Add (Var "a") (Var "b")))
             )
+            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Conditional (DOp LT (DVar "a") (DLit (DInt 1))))
@@ -691,6 +694,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
         createDependencyGraph []
             (Let [Def "a" (Lit (LInt 1))]
                  (If (Lit (LBool True)) (Var "a") (Lit (LInt 2))))
+            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -716,6 +720,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                      (Let [Def "b" (Lit (LInt 2))]
                           (If (Lit (LBool True)) (Op Add (Var "a") (Var "b")) (Lit (LInt 3)))) 
                      (Lit (LInt 2))))
+            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -751,6 +756,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     (App (Var "foo") (Lit (LInt 1))) 
                     (App (Var "bar") (Lit (LInt 2)))) 
                 (App (App (Var "baz") (App (Var "bong") (Lit (LInt 3)))) (Lit (LInt 4))))
+            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
@@ -774,6 +780,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
             (Let [ Def "a" (App (Var "foo") (Var "n"))
                  , Def "b" (App (Var "bar") (Var "n"))
                  ] (Op Add (Var "a") (Var "b")))
+            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DApp "foo" [DVar "n"]))
@@ -800,6 +807,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                         (App (App (App (Var "scoop") (Lit (LInt 1))) (Lit (LInt 2))) (Lit (LInt 3))))
                     (App (Var "head") (Lit (LList [Lit (LInt 1), Lit (LInt 2), Lit (LInt 3)]))))
                 (App (Var "head") (App (Var "bar") (Lit (LInt 1)))))
+            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DAtomApp "head" [DLit (DList [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)])])) (DAtomApp "head" [DVar "_x4"])))
