@@ -35,6 +35,7 @@ data DNode
 
 data DExpr
     = DApp Name [DExpr]
+    | DAtomApp Name [DExpr]
     | DOp BinOp DExpr DExpr
     | DVar Name
     | DLit DLit
@@ -214,6 +215,8 @@ dependenciesFromDExpr (DOp _ e1 e2)
     = dependenciesFromDExpr e1 ++ dependenciesFromDExpr e2
 dependenciesFromDExpr (DApp _ es)
     = concatMap dependenciesFromDExpr es
+dependenciesFromDExpr (DAtomApp _ es)
+    = concatMap dependenciesFromDExpr es
 
 -- setupDependencies adds all the dependencies for a node with the given name
 -- and DExpr
@@ -273,7 +276,7 @@ buildExpr e
             if isAtomicFunction fName
                 -- if the function is atomic, then can just return dexpr
                 -- for embedding
-                then DApp fName <$> mapM buildExpr args
+                then DAtomApp fName <$> mapM buildExpr args
                 -- otherwise, build the node as usual
                 else buildNode
         -- if not atomic, build the node
@@ -321,7 +324,10 @@ buildGraphWithName mn e @ App{} = do
     -- collect the name of the function and its given arguments
     let (fName, args) = collectApp e
     -- build the nodes for the arguments
-    dexpr <- DApp fName <$> mapM buildExpr args
+    argExprs <- mapM buildExpr args
+    let dexpr = if isAtomicFunction fName
+        then DAtomApp fName argExprs
+        else DApp fName argExprs
     -- setup this node
     setupExpressionNode name dexpr
     return name

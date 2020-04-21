@@ -802,8 +802,8 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 (App (Var "head") (App (Var "bar") (Lit (LInt 1)))))
             @?= ( Map.fromList
                     [ ("_", Scope)
-                    , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DApp "head" [DLit (DList [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)])])) (DApp "head" [DVar "_x4"])))
-                    , ("_x1", Expression (DApp "schwoop" [DApp "head" [DVar "_x2"], DVar "_x3"]))
+                    , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DAtomApp "head" [DLit (DList [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)])])) (DAtomApp "head" [DVar "_x4"])))
+                    , ("_x1", Expression (DApp "schwoop" [DAtomApp "head" [DVar "_x2"], DVar "_x3"]))
                     , ("_x2", Expression (DApp "foo" [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)]))
                     , ("_x3", Expression (DApp "scoop" [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)]))
                     , ("_x4", Expression (DApp "bar" [DLit (DInt 1)]))

@@ -10,7 +10,6 @@ import Middleend
     , DType(..)
     , DExpr(..)
     , DLit(..)
-    , isAtomicFunction
     )
 
 import Prelude hiding (EQ, LT, GT)
@@ -152,6 +151,8 @@ dexprToCode (DLit l)
 dexprToCode (DVar n)
     = n
 dexprToCode (DApp n es)
+    = unwords (n : map parenthesisedDExprToCode es)
+dexprToCode (DAtomApp n es)
     = unwords (n : map parenthesisedDExprToCode es)
 dexprToCode (DOp op e1 e2)
     = parenthesisedDExprToCode e1 
@@ -329,11 +330,8 @@ scopeContainsParallelism start
             let checkChildren = or <$> 
                     (Set.toList <$> getChildren n >>= mapM hasFunctionCalls)
             case node of
-                Expression (DApp fName _) -> 
-                    if isAtomicFunction fName
-                        then checkChildren
-                        else return True
-                _                         -> checkChildren
+                Expression DApp{} -> return True
+                _                 -> checkChildren
                 
 
     
@@ -360,10 +358,8 @@ graphToParallelCodeSimple name = do
             (mLastName, code) <- generateChildren
             par <- getParallelisedScope
             let expCode = case (par, e) of
-                    (True, DApp fName _) ->
-                        if isAtomicFunction fName
-                            then "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                            else name ++ " <- rpar (" ++ dexprToCode e ++ ")"
+                    (True, DApp{}) ->
+                        name ++ " <- rpar (" ++ dexprToCode e ++ ")"
                     (True, _)        ->
                         "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     _                ->
