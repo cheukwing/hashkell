@@ -22,6 +22,6 @@ import Middleend.DependencyGraph
 -- and removing any unused identifier definitions.
 -- these clean up steps ensure that the encoding instructions generated from the
 -- aggregation table are correct
-pipeline :: Steps -> AggregationTable -> EncodingInstructionTable
-pipeline steps
-    = createEncodingInstructionTable steps . cleanup
+pipeline :: Steps -> MergeAtomic -> AggregationTable -> EncodingInstructionTable
+pipeline steps ma
+    = createEncodingInstructionTable steps ma . cleanup

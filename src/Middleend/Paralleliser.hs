@@ -64,8 +64,8 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
 -- instructions, which tells the code generator to generate a certain function,
 -- and how to generate that function into Haskell, i.e. whether in sequential
 -- or parallel
-createEncodingInstructionTable :: Steps -> AggregationTable -> EncodingInstructionTable
-createEncodingInstructionTable steps
+createEncodingInstructionTable :: Steps -> MergeAtomic -> AggregationTable -> EncodingInstructionTable
+createEncodingInstructionTable steps ma
     = foldl aggToInstr Map.empty . Map.toList
     where 
         aggToInstr :: EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
@@ -97,7 +97,7 @@ createEncodingInstructionTable steps
                 (_, _) ->
                     Map.insert name (Sequential mts params defn) eit
             where
-                dg             = createDependencyGraph params defn True
+                dg             = createDependencyGraph ma params defn
                 seqName        = name ++ "_seq"
                 par            = Parallel mts params dg
                 parName        = name ++ "_par"

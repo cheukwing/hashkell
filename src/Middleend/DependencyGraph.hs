@@ -57,8 +57,8 @@ type FunctionState = (DependencyGraph, Params, Counter, CurrentScope, MergeAtomi
 
 -- createDependencyGraph builds the dependency graph of a function with the
 -- given params and definition
-createDependencyGraph :: [Name] -> Expr -> MergeAtomic -> DependencyGraph
-createDependencyGraph params defn ma
+createDependencyGraph :: MergeAtomic -> [Name] -> Expr -> DependencyGraph
+createDependencyGraph ma params defn 
     = dg
     where
         initState     = ( (Map.fromList [("_", Scope)], Set.empty)

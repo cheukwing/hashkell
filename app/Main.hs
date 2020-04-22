@@ -14,10 +14,11 @@ import Control.Monad (when)
 import qualified Data.Text.Lazy.IO as TL
 
 data Arguments = Arguments
-    { file        :: [String]
-    , parallelise :: Bool
-    , steps       :: Int
-    , graph       :: Bool
+    { file           :: [String]
+    , parallelise    :: Bool
+    , steps          :: Int
+    , separateAtomic :: Bool
+    , graph          :: Bool
     }
 
 arguments :: Parser Arguments
@@ -38,6 +39,11 @@ arguments
            <> value 1000 
             )
         <*> switch
+            ( long "separate atomic"
+           <> short 'a'
+           <> help "Whether to separate atomic expressions into separate nodes when building the graph"
+            )
+        <*> switch
             ( long "graph"
            <> short 'g'
            <> help "Whether to draw the graph of parallelisable functions"
@@ -53,7 +59,7 @@ main = process =<< execParser args
                 )
 
 process :: Arguments -> IO ()
-process (Arguments files parallelise steps graph) = do
+process (Arguments files parallelise steps sa graph) = do
     contents <- mapM readFile files
     let parses = zip files (map parseProg contents)
         processSingle n prog =
@@ -61,7 +67,7 @@ process (Arguments files parallelise steps graph) = do
                 Left err ->
                     putStrLn $ n ++ ": Annotation error - " ++ show err
                 Right at -> do
-                    let eit = Middleend.pipeline steps at
+                    let eit = Middleend.pipeline steps (not sa) at
                     when parallelise $
                         let out = "./out/par_" ++ Posix.takeFileName n
                         in writeFile out (Backend.pipelineEncode eit)
