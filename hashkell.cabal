@@ -4,13 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 31986a4cd6a8e77a030d717dc2acb356fa7322e7187001bd2355735ddc66065c
+-- hash: 64095d892dc7e3212b3ec374bdfacafdcc018cdcf7f8857c151cdbe62feef863
 
 name:           hashkell
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/cheukwing/simple-haskell#readme>
-homepage:       https://github.com/cheukwing/simple-haskell#readme
-bug-reports:    https://github.com/cheukwing/simple-haskell/issues
+description:    Please see the README on GitHub at <https://github.com/cheukwing/hashkell#readme>
+homepage:       https://github.com/cheukwing/hashkell#readme
+bug-reports:    https://github.com/cheukwing/hashkell/issues
 author:         Michael Tsang
 maintainer:     me@cheukwing.dev
 copyright:      2020 Michael Tsang
@@ -22,7 +22,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/cheukwing/simple-haskell
+  location: https://github.com/cheukwing/hashkell
 
 library
   exposed-modules:
