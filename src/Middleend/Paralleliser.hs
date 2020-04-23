@@ -60,6 +60,9 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
                 Nothing -> Var name
 
 
+-- parallelisationAndTrivialityTables returns a table with the parallelisation
+-- type of each function, and the triviality of each function (based on the
+-- parallelisationType)
 parallelisationAndTrivialityTables :: Steps -> AggregationTable -> (Map Name ParallelisationType, Map Name Bool)
 parallelisationAndTrivialityTables steps at
     = (parTable, triTable)

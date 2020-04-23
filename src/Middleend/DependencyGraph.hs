@@ -278,14 +278,14 @@ buildOpExpr (Op op e1 e2)
 buildOpExpr e
     = buildExpr e
 
--- isAtomicFunction returns True if the given name is the name of an atomic
--- function, i.e. a O(1) in-built function
--- NOTE: incomplete list of functions
-
+-- isTrivialFunction returns True if the given name is the name of an atomic
+-- function, i.e. a O(1) in-built function, or of a function which the user
+-- assigned low complexity
 isTrivialFunction :: Name -> State BuildingState Bool
 isTrivialFunction n
     = (||) isAtomic <$> isTrivial
     where
+        -- NOTE: incomplete list of functions
         isAtomic  = n `elem` ["null", "head", "tail"]
         isTrivial = Maybe.fromMaybe False 
             <$> (Map.lookup n . trivialityTable <$> get)
