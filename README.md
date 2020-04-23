@@ -1,4 +1,4 @@
-# simple-haskell
+# hashkell
 
 Parser for a simple subset of Haskell with time complexity annotations and dependency graphs.
 
@@ -19,17 +19,19 @@ stack test # to test
 The arguments to pass into the program are:
 
 ```output
-unnamed project - semi-automatic parallelisation
+Hashkell - Haskell with semi-automatic parallelisation
 
-Usage: simple-haskell-exe FILENAMES... [-p|--parallelise] [-s|--steps ARG]
-                          [-g|--graph]
-  Semi-automatic parallelisation of Simple Haskell
+Usage: hashkell-exe FILENAMES... [-p|--parallelise] [-s|--steps ARG]
+                    [-a|--separate atomic] [-g|--graph]
+  Adds parallelisation strategies to Hashkell code
 
 Available options:
   FILENAMES...             The programs to parallelise
   -p,--parallelise         Whether to parallelise the input programs
   -s,--steps ARG           The number of steps to set the parallelisation
                            boundary to
+  -a,--separate atomic     Whether to separate atomic expressions into separate
+                           nodes when building the graph
   -g,--graph               Whether to draw the graph of parallelisable functions
   -h,--help                Show this help text
 ```

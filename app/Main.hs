@@ -54,8 +54,8 @@ main = process =<< execParser args
     where 
         args = info (arguments <**> helper)
                 ( fullDesc
-               <> progDesc "Semi-automatic parallelisation of Hashkell"
-               <> header "unnamed project - semi-automatic parallelisation"
+               <> progDesc "Adds parallelisation strategies to Hashkell code"
+               <> header "Hashkell - Haskell with semi-automatic parallelisation"
                 )
 
 process :: Arguments -> IO ()
