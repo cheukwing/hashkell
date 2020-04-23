@@ -1,5 +1,5 @@
 
-module Simple.Syntax where
+module Hashkell.Syntax where
 
 type Name = String
 

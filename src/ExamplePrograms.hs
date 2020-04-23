@@ -1,6 +1,6 @@
 module ExamplePrograms where
 
-import Simple.Syntax
+import Hashkell.Syntax
 
 import Prelude hiding (EQ, LT, GT)
 

@@ -1,12 +1,12 @@
 {
 -- Adapted from Write You A Haskell
-module Simple.Parser (
+module Hashkell.Parser (
     parseProg
 ) where
 
 import Prelude hiding (EQ, GT, LT)
-import Simple.Lexer
-import Simple.Syntax
+import Hashkell.Lexer
+import Hashkell.Syntax
 
 import Control.Monad.Except
 

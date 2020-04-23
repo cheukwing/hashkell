@@ -1,6 +1,6 @@
 module Middleend.Paralleliser where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend (Aggregation(..), Cplx(..), AggregationTable)
 import Middleend.DependencyGraph
 

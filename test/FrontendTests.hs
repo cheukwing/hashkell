@@ -7,7 +7,7 @@ import Prelude hiding (EQ, LT, GT)
 import Data.Either (Either(..))
 import qualified Data.Map.Strict as Map
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend.Complexity (parseComplexity, Cplx(..))
 import Frontend.Verification (verifyAggregation)
 import Frontend.Aggregator (aggregate)

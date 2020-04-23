@@ -1,7 +1,7 @@
 module Backend.Drawer where
 
 import Middleend (DependencyGraph, DNode(..), DType(..))
-import Simple.Syntax
+import Hashkell.Syntax
 import Backend.CodeGenerator
 
 import qualified Data.Text.Lazy as TL

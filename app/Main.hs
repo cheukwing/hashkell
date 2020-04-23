@@ -3,7 +3,7 @@ module Main where
 import Frontend
 import Middleend
 import Backend
-import Simple.Parser (parseProg)
+import Hashkell.Parser (parseProg)
 
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -54,7 +54,7 @@ main = process =<< execParser args
     where 
         args = info (arguments <**> helper)
                 ( fullDesc
-               <> progDesc "Semi-automatic parallelisation of Simple Haskell"
+               <> progDesc "Semi-automatic parallelisation of Hashkell"
                <> header "unnamed project - semi-automatic parallelisation"
                 )
 

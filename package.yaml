@@ -1,4 +1,4 @@
-name: simple-haskell
+name: hashkell
 version: 0.1.0.0
 github: "cheukwing/simple-haskell"
 license: MIT
@@ -8,7 +8,6 @@ copyright: "2020 Michael Tsang"
 
 extra-source-files:
   - README.md
-  - ChangeLog.md
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -35,7 +34,7 @@ library:
   source-dirs: src
 
 executables:
-  simple-haskell-exe:
+  hashkell-exe:
     main: Main.hs
     source-dirs: app
     ghc-options:
@@ -43,10 +42,10 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - simple-haskell
+      - hashkell
 
 tests:
-  simple-haskell-test:
+  hashkell-test:
     main: Spec.hs
     source-dirs: test
     ghc-options:
@@ -54,4 +53,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - simple-haskell
+      - hashkell

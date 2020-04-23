@@ -4,8 +4,8 @@ import Test.Tasty.HUnit
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import Simple.Parser (parseProg)
-import Simple.Syntax as Syntax
+import Hashkell.Parser (parseProg)
+import Hashkell.Syntax as Syntax
 
 import FrontendTests
 import MiddleendTests

@@ -12,7 +12,7 @@ module Middleend (
 
 import Frontend (AggregationTable)
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Middleend.Cleaner
 import Middleend.Paralleliser
 import Middleend.DependencyGraph

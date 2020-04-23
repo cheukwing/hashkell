@@ -7,7 +7,7 @@ import Prelude hiding (EQ, LT, GT)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend (Cplx(..))
 import Middleend.Cleaner (ensureUniqueNames, ensureNoUnusedDefs)
 import Middleend.Paralleliser 

@@ -1,6 +1,6 @@
 module Backend.CodeGenerator where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Middleend 
     ( DependencyGraph
     , Dependency

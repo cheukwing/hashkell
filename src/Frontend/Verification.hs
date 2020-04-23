@@ -1,6 +1,6 @@
 module Frontend.Verification where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend.Complexity
 import Frontend.Aggregator
 import Frontend.Error

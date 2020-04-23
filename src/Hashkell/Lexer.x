@@ -2,12 +2,12 @@
 -- Adapted from Write You A Haskell
 {-# LANGUAGE FlexibleContexts #-}
 
-module Simple.Lexer (
+module Hashkell.Lexer (
     Token(..),
     scanTokens,
 ) where
 
-import Simple.Syntax
+import Hashkell.Syntax
 
 import Control.Monad.Except
 }

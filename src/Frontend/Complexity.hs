@@ -1,6 +1,6 @@
 module Frontend.Complexity where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend.Error
 
 import Data.Either (Either)

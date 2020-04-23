@@ -1,6 +1,6 @@
 module Middleend.Cleaner where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend (AggregationTable, Aggregation(..))
 
 import Control.Monad.State.Strict

@@ -1,6 +1,6 @@
 module Frontend.Aggregator where
 
-import Simple.Syntax
+import Hashkell.Syntax
 import Frontend.Complexity
 import Frontend.Error
 

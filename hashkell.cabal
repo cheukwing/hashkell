@@ -1,0 +1,105 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 31986a4cd6a8e77a030d717dc2acb356fa7322e7187001bd2355735ddc66065c
+
+name:           hashkell
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/cheukwing/simple-haskell#readme>
+homepage:       https://github.com/cheukwing/simple-haskell#readme
+bug-reports:    https://github.com/cheukwing/simple-haskell/issues
+author:         Michael Tsang
+maintainer:     me@cheukwing.dev
+copyright:      2020 Michael Tsang
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/cheukwing/simple-haskell
+
+library
+  exposed-modules:
+      Backend
+      Backend.CodeGenerator
+      Backend.Drawer
+      ExamplePrograms
+      Frontend
+      Frontend.Aggregator
+      Frontend.Complexity
+      Frontend.Error
+      Frontend.Verification
+      Hashkell.Lexer
+      Hashkell.Parser
+      Hashkell.Syntax
+      Middleend
+      Middleend.Cleaner
+      Middleend.DependencyGraph
+      Middleend.Paralleliser
+  other-modules:
+      Paths_hashkell
+  hs-source-dirs:
+      src
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers >=0.6.0.1
+    , filepath
+    , graphviz
+    , mtl
+    , optparse-applicative
+    , tasty
+    , tasty-hunit
+    , text
+  default-language: Haskell2010
+
+executable hashkell-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_hashkell
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers >=0.6.0.1
+    , filepath
+    , graphviz
+    , hashkell
+    , mtl
+    , optparse-applicative
+    , tasty
+    , tasty-hunit
+    , text
+  default-language: Haskell2010
+
+test-suite hashkell-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      FrontendTests
+      MiddleendTests
+      Paths_hashkell
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers >=0.6.0.1
+    , filepath
+    , graphviz
+    , hashkell
+    , mtl
+    , optparse-applicative
+    , tasty
+    , tasty-hunit
+    , text
+  default-language: Haskell2010

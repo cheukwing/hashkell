@@ -6,7 +6,7 @@ module Backend (
 import Middleend (EncodingInstructionTable, EncodingInstruction(..))
 import Backend.CodeGenerator
 import Backend.Drawer
-import Simple.Syntax
+import Hashkell.Syntax
 
 import qualified Data.Text.Lazy as TL
 import qualified Data.Map.Strict as Map

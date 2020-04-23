@@ -1,6 +1,6 @@
 module Middleend.DependencyGraph where
 
-import Simple.Syntax
+import Hashkell.Syntax
 
 import Control.Monad.State.Strict
 import Control.Monad (void)

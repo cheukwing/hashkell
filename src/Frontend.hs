@@ -10,7 +10,7 @@ import Frontend.Aggregator
 import Frontend.Error
 import Frontend.Verification
 import Frontend.Complexity
-import Simple.Syntax
+import Hashkell.Syntax
 
 import Data.Either (Either)
 
