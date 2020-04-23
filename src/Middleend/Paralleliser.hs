@@ -60,14 +60,23 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
                 Nothing -> Var name
 
 
+parallelisationAndTrivialityTables :: Steps -> AggregationTable -> (Map Name ParallelisationType, Map Name Bool)
+parallelisationAndTrivialityTables steps at
+    = (parTable, triTable)
+    where
+        parTable = Map.map (parallelisationType steps) at
+        triTable = Map.map (== Never) parTable
+
+
 -- createEncodingInstructionTable takes each aggregation and creates encoding
 -- instructions, which tells the code generator to generate a certain function,
 -- and how to generate that function into Haskell, i.e. whether in sequential
 -- or parallel
 createEncodingInstructionTable :: Steps -> MergeAtomic -> AggregationTable -> EncodingInstructionTable
-createEncodingInstructionTable steps ma
-    = foldl aggToInstr Map.empty . Map.toList
-    where 
+createEncodingInstructionTable steps ma at
+    = foldl aggToInstr Map.empty . Map.toList $ at
+    where
+        (parTable, triTable) = parallelisationAndTrivialityTables steps at
         aggToInstr :: EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
         -- If there is no definition, do not bother encoding at all
         aggToInstr eit (_, (_, _, Nothing))
@@ -78,7 +87,7 @@ createEncodingInstructionTable steps ma
         -- If we have a complexity and definition, then assess whether it is
         -- worth parallelising, then add the relevant encoding instructions
         aggToInstr eit (name, agg @ (_, mts, Just (params, defn)))
-            = case (parallelisationType steps agg, hasParallelism dg) of
+            = case ((Map.!) parTable name, hasParallelism dg) of
                 -- If should always parallelise, and parallelism exists
                 (Always, True) ->
                     Map.insert name par eit 
@@ -97,7 +106,7 @@ createEncodingInstructionTable steps ma
                 (_, _) ->
                     Map.insert name (Sequential mts params defn) eit
             where
-                dg             = createDependencyGraph ma params defn
+                dg             = createDependencyGraph ma triTable params defn
                 seqName        = name ++ "_seq"
                 par            = Parallel mts params dg
                 parName        = name ++ "_par"
@@ -164,7 +173,7 @@ hasParallelism (ns, ds)
                             $ Set.map (\(_, c, t) -> (c, t))
                             $ Set.filter (\(p, _, _) -> p == n) ds
 
-                Expression DHighApp{} -> True
+                Expression (DHighApp _ DApp{} _) -> True
 
                 _  -- otherwise if not Conditional node
                     | null children       -> False

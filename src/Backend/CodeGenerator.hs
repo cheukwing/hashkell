@@ -341,8 +341,9 @@ scopeContainsParallelism start
                     (Set.toList <$> getChildren n 
                         >>= mapM hasHigherOrderFunctionCalls)
             case node of
-                Expression DHighApp{} -> return True
-                _                     -> checkChildren
+                Expression (DHighApp _ DAtomApp{} _) -> checkChildren
+                Expression DHighApp{}                -> return True
+                _                                    -> checkChildren
 
     
 graphToParallelCodeSimple :: Name -> State GenerationState (Name, Code)
@@ -369,8 +370,8 @@ graphToParallelCodeSimple name = do
             par <- getParallelisedScope
             let expCode = case (par, e) of
                     (True, DApp{}) ->
-                        name ++ " <- rpar (" ++ dexprToCode e ++ ")"
-                    (True, DHighApp{}) ->
+                        name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                    (True, DHighApp _ DApp{} _) ->
                         name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
                     (True, _)        ->
                         "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"

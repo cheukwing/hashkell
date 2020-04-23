@@ -19,6 +19,10 @@ import Middleend.Paralleliser
     )
 import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..), createDependencyGraph)
 
+_createDependencyGraph = createDependencyGraph True Map.empty
+
+_createEncodingInstructionTable = createEncodingInstructionTable 100 True
+
 middleendTests :: TestTree
 middleendTests = testGroup "Middleend Tests"
     [ ensureUniqueNamesTests
@@ -249,16 +253,16 @@ parallelisationTypeTests = testGroup "parallelisationType tests"
             @?= Branching (Op GTE (App (Var "length") (Var "n")) (Lit (LInt 10)))
     ]
 
-createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable tests"
+createEncodingInstructionTableTests = testGroup "_createEncodingInstructionTable tests"
     [ testCase "ignores functions without definitions" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ("foo", (Just (Polynomial "m" 1), Nothing, Nothing))
         , ("bar", (Just (Polynomial "q" 1), Just [Int, Int], Nothing))
         , ("baz", (Nothing, Just [Bool, Int, Int, Int, Int, Int], Nothing))
         ])
         @?= Map.empty
     , testCase "does not parallelise functions without complexity annotation" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ("foo", (Nothing, Just [Int, Int], functionWithBranch))
         , ("bar", (Nothing, Nothing, functionWithBranch))
         ])
@@ -267,7 +271,7 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         , ("bar", Sequential Nothing ["n"] defnWithBranch)
         ]
     , testCase "does not parallelise functions with low complexity" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ("foo", (Just (Constant 50), Just [Int, Int], functionWithBranch))
         , ("bar", (Just (Constant 99), Nothing, functionWithBranch))
         , ("baz", (Just (Logarithmic "n"), Nothing, functionWithBranch))
@@ -278,7 +282,7 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         , ("baz", Sequential Nothing ["n"] defnWithBranch)
         ]
     , testCase "exclusively parallelises functions with high trivial complexity" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ("foo", (Just (Constant 101), Just [Int, Int], functionWithBranch))
         , ("bar", (Just (Constant 10000000), Nothing, functionWithBranch))
         ])
@@ -287,7 +291,7 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         , ("bar", Parallel Nothing ["n"] graphWithBranch)
         ]
     , testCase "parallelise functions with polynomial complexity" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ("foo", (Just (Polynomial "n" 2), Just [Int, Int], functionWithBranch))
         , ("bar", (Just (Polynomial "n" 1), Nothing, functionWithBranch))
         ])
@@ -308,7 +312,7 @@ createEncodingInstructionTableTests = testGroup "createEncodingInstructionTable 
         , ("bar_par", Parallel Nothing ["n"] graphWithBranch)
         ]
     , testCase "replaces recursive calls with the sequential branch, in the sequential branch" $
-        createEncodingInstructionTable 100 (Map.fromList
+        _createEncodingInstructionTable (Map.fromList
         [ ( "foo"
           , ( Just (Polynomial "n" 2)
             , Just [Int, Int]
@@ -576,9 +580,9 @@ hasParallelismTests = testGroup "hasParallelism tests"
         @?= True
     ]
 
-createDependencyGraphTests = testGroup "createDependencyGraph tests"
+createDependencyGraphTests = testGroup "_createDependencyGraph tests"
     [ testCase "create very basic graph" $
-        createDependencyGraph [] (Lit (LInt 1)) True
+        _createDependencyGraph [] (Lit (LInt 1))
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DLit (DInt 1)))
@@ -586,7 +590,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 , Set.fromList [("_", "_x0", Dep)]
                 )
     , testCase "create very basic graph with argument" $
-        createDependencyGraph ["n"] (Var "n") True
+        _createDependencyGraph ["n"] (Var "n")
             @?= ( Map.fromList 
                     [("_", Scope), ("_x0", Expression (DVar "n"))]
                 , Set.fromList 
@@ -595,7 +599,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create atomic binary operation graph" $
-        createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3))) True
+        _createDependencyGraph ["n"] (Op Add (Op Add (Lit (LInt 1)) (Lit (LInt 2))) (Lit (LInt 3)))
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DOp Add (DLit (DInt 1)) (DLit (DInt 2))) (DLit (DInt 3))))
@@ -603,7 +607,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                 , Set.fromList [("_", "_x0", Dep)]
                 )
     , testCase "create binary operation graph" $
-        createDependencyGraph ["n"] (Op Add (Var "n") (Lit (LInt 3))) True
+        _createDependencyGraph ["n"] (Op Add (Var "n") (Lit (LInt 3)))
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DVar "n") (DLit (DInt 3))))
@@ -614,7 +618,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create function application graph" $
-        createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1)))) True
+        _createDependencyGraph ["n"] (App (App (Var "someFunc") (Var "n")) (Op Add (Lit (LInt 1)) (Lit (LInt 1))))
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Expression (DApp "someFunc" [DVar "n", DOp Add (DLit (DInt 1)) (DLit (DInt 1))]))
@@ -625,13 +629,12 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create let graph" $
-        createDependencyGraph ["n"] 
+        _createDependencyGraph ["n"] 
             (Let [ Def "a" (Lit (LInt 1))
                  , Def "b" (Lit (LInt 2))
                  ] 
                  (Op Add (Var "a") (Var "n"))
             )
-            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -646,13 +649,12 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create let graph with reversed expression order" $
-        createDependencyGraph ["n"] 
+        _createDependencyGraph ["n"] 
             (Let [ Def "a" (Lit (LInt 1))
                  , Def "b" (Lit (LInt 2))
                  ] 
                  (Op Add (Var "n") (Var "a"))
             )
-            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -666,12 +668,11 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create if graph" $
-        createDependencyGraph ["a", "b"] 
+        _createDependencyGraph ["a", "b"] 
             (If (Op LT (Var "a") (Lit (LInt 1)))
                 (Lit (LInt 2))
                 (App (Var "foobar") (Op Add (Var "a") (Var "b")))
             )
-            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x0", Conditional (DOp LT (DVar "a") (DLit (DInt 1))))
@@ -691,10 +692,9 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "rearrange external dependencies" $
-        createDependencyGraph []
+        _createDependencyGraph []
             (Let [Def "a" (Lit (LInt 1))]
                  (If (Lit (LBool True)) (Var "a") (Lit (LInt 2))))
-            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -714,13 +714,12 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "rearrange nested external dependencies" $
-        createDependencyGraph []
+        _createDependencyGraph []
             (Let [Def "a" (Lit (LInt 1))]
                  (If (Lit (LBool True)) 
                      (Let [Def "b" (Lit (LInt 2))]
                           (If (Lit (LBool True)) (Op Add (Var "a") (Var "b")) (Lit (LInt 3)))) 
                      (Lit (LInt 2))))
-            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DLit (DInt 1)))
@@ -750,13 +749,12 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "create a single node for the sum of multiple nodes" $
-        createDependencyGraph [] 
+        _createDependencyGraph [] 
             (Op Add 
                 (Op Add 
                     (App (Var "foo") (Lit (LInt 1))) 
                     (App (Var "bar") (Lit (LInt 2)))) 
                 (App (App (Var "baz") (App (Var "bong") (Lit (LInt 3)))) (Lit (LInt 4))))
-            True
             @?= ( Map.fromList 
                     [ ("_", Scope)
                     , ("_x1", Expression (DApp "foo" [DLit (DInt 1)]))
@@ -776,11 +774,10 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
                 )
     , testCase "does not create intermediate nodes for let definitions" $
-        createDependencyGraph ["n"]
+        _createDependencyGraph ["n"]
             (Let [ Def "a" (App (Var "foo") (Var "n"))
                  , Def "b" (App (Var "bar") (Var "n"))
                  ] (Op Add (Var "a") (Var "b")))
-            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("a", Expression (DApp "foo" [DVar "n"]))
@@ -795,7 +792,7 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                     ]
             )
     , testCase "atomic function calls do not create new nodes" $
-        createDependencyGraph ["n"]
+        _createDependencyGraph ["n"]
             (Op Add
                 (Op Add
                     (App 
@@ -807,7 +804,6 @@ createDependencyGraphTests = testGroup "createDependencyGraph tests"
                         (App (App (App (Var "scoop") (Lit (LInt 1))) (Lit (LInt 2))) (Lit (LInt 3))))
                     (App (Var "head") (Lit (LList [Lit (LInt 1), Lit (LInt 2), Lit (LInt 3)]))))
                 (App (Var "head") (App (Var "bar") (Lit (LInt 1)))))
-            True
             @?= ( Map.fromList
                     [ ("_", Scope)
                     , ("_x0", Expression (DOp Add (DOp Add (DVar "_x1") (DAtomApp "head" [DLit (DList [DLit (DInt 1), DLit (DInt 2), DLit (DInt 3)])])) (DAtomApp "head" [DVar "_x4"])))
