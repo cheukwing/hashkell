@@ -1,3 +1,6 @@
+-- Matrix multiplication with unwrapped higher order functions
+-- https://rosettacode.org/wiki/Matrix_multiplication#Haskell
+
 multiply ## us^3;
 multiply :: [[Int]] -> [[Int]] -> [[Int]];
 multiply us vs 

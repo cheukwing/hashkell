@@ -1,3 +1,5 @@
+-- Matrix multiplication
+-- https://rosettacode.org/wiki/Matrix_multiplication#Haskell
 
 multiply ## us^3;
 multiply :: [[Int]] -> [[Int]] -> [[Int]];
@@ -11,6 +13,8 @@ mult xs zss ys
         else if null xs
             then mult (map (mul (head ys)) (head zss)) (tail zss) (tail ys)
             else mult (zipWith (agg (head ys)) xs (head zss)) (tail zss) (tail ys);
+
+-- Lambda functions are not supported
 
 mul ## 1;
 mul a b = a * b;

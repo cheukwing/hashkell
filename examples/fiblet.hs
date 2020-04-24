@@ -1,3 +1,6 @@
+-- Naive Fibonacci Function using a let expression
+-- https://rosettacode.org/wiki/Fibonacci_sequence#Haskell
+
 fib ## 2^x;
 fib :: Int -> Int;
 fib x =

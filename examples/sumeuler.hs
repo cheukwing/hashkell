@@ -1,3 +1,6 @@
+-- SumEuler with unwrapped higher order functions
+-- https://github.com/haskell/ThreadScope/blob/master/papers/haskell_symposium_2009/sumEuler/SumEuler0.hs
+
 mkList ## n;
 mkList :: Int -> [Int];
 mkList n =
