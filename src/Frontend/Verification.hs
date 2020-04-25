@@ -15,7 +15,8 @@ type FunctionData = (Maybe Cplx, Maybe [Type], Maybe ([Name], Defn))
 type FunctionTable = Map Name FunctionData
 
 -- verify checks that the aggregations in an aggregation table are all correct
--- with respect to their complexity annotation
+-- with respect to their complexity annotation, converting it to a function
+-- table if all correct
 -- NOTE: verification such as general type checking is not considered as we
 -- assume input programs are correct when annotations are removed, and because
 -- the final output program will be verified by GHC/similar compiler anyway
@@ -26,7 +27,8 @@ verify at
         convertAndVerify agg = toFunctionData agg >>= verifyFunctionData
         verify' ft (k, v) = flip (Map.insert k) ft <$> convertAndVerify v
 
-
+-- toFunctionData converts an aggregation to function data by parsing
+-- the complexity annotation
 toFunctionData :: Aggregation -> Either Error FunctionData
 toFunctionData (mc, mts, mfn) = do
     mcplx <- case mc of
@@ -34,7 +36,7 @@ toFunctionData (mc, mts, mfn) = do
         Just c  -> Just <$> parseComplexity c
     return (mcplx, mts, mfn)
 
--- verifyFunctionData checks that the complexity annotation in an aggregation
+-- verifyFunctionData checks that the complexity of a function data
 -- is compatible with the other information given for a certain function
 verifyFunctionData :: FunctionData -> Either Error FunctionData
 -- if we just have complexity and types, then if we do have a param in our
