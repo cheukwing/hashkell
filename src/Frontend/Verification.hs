@@ -24,10 +24,9 @@ verify at
 verifyAggregation :: Aggregation -> Either Error ()
 -- if we just have complexity and types, then if we do have a param in our
 -- complexity, ensure that it will have some assigned type
--- NOTE: most likely not necessary, since ts should not be empty if parsed
 verifyAggregation (Just c, Just ts, Nothing)
     = maybe (return ()) 
-        (\_ -> when (null ts) $ throwError IncompatibleComplexity)
+        (\_ -> when (length ts < 2) $ throwError IncompatibleComplexity)
         (paramComplexity c)
 -- if we just have complexity and definition, then if we do have a param in our
 -- complexity, ensure that it is also present in the params of the definition

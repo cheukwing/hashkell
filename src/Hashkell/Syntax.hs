@@ -1,4 +1,3 @@
-
 module Hashkell.Syntax where
 
 type Name = String
