@@ -9,14 +9,15 @@ import qualified Data.Map.Strict as Map
 
 import Hashkell.Syntax
 import Frontend.Complexity (parseComplexity, Cplx(..))
-import Frontend.Verification (verifyAggregation)
+import Frontend.Verification (verifyFunctionData, toFunctionData)
 import Frontend.Aggregator (aggregate)
 import Frontend.Error (Error(..))
 
 frontendTests :: TestTree
 frontendTests = testGroup "Frontend Tests"
     [ parseComplexityTests
-    , verifyAggregationTests
+    , verifyFunctionDataTests
+    , toFunctionDataTests
     , aggregateTests
     ]
 
@@ -62,25 +63,40 @@ parseComplexityTests = testGroup "parseComplexity tests"
             @?= Left UnsupportedComplexity
     ]
 
-verifyAggregationTests = testGroup "verifyAggregation tests"
+verifyFunctionDataTests = testGroup "verifyFunctionData tests"
     [ testCase "complexity with param not present in function params is incompatible" $
-        verifyAggregation (Just (Polynomial "n" 2), Nothing, Just (["m"], Lit (LInt 1)))
+        verifyFunctionData (Just (Polynomial "n" 2), Nothing, Just (["m"], Lit (LInt 1)))
             @?= Left IncompatibleComplexity
     , testCase "complexity with param not present in function params is incompatible (typed)" $
-        verifyAggregation (Just (Polynomial "n" 2), Just [Int, Int], Just (["m"], Lit (LInt 1)))
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Int, Int], Just (["m"], Lit (LInt 1)))
             @?= Left IncompatibleComplexity
     , testCase "complexity with boolean param is incompatible" $
-        verifyAggregation (Just (Polynomial "n" 2), Just [Bool, Int], Just (["n"], Lit (LInt 1)))
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Bool, Int], Just (["n"], Lit (LInt 1)))
             @?= Left IncompatibleComplexity
     , testCase "complexity with int param is compatible" $
-        verifyAggregation (Just (Polynomial "n" 2), Just [Int, Int], Just (["n"], Lit (LInt 1)))
-            @?= Right ()
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Int, Int], Just (["n"], Lit (LInt 1)))
+            @?= Right (Just (Polynomial "n" 2), Just [Int, Int], Just (["n"], Lit (LInt 1)))
     , testCase "complexity with list param is compatible" $
-        verifyAggregation (Just (Polynomial "n" 2), Just [List Bool, Int], Just (["n"], Lit (LInt 1)))
-            @?= Right ()
+        verifyFunctionData (Just (Polynomial "n" 2), Just [List Bool, Int], Just (["n"], Lit (LInt 1)))
+            @?= Right (Just (Polynomial "n" 2), Just [List Bool, Int], Just (["n"], Lit (LInt 1)))
     , testCase "complexity with param present in function params is incompatible (untyped)" $
-        verifyAggregation (Just (Polynomial "n" 2), Nothing, Just (["n"], Lit (LInt 1)))
-            @?= Right ()
+        verifyFunctionData (Just (Polynomial "n" 2), Nothing, Just (["n"], Lit (LInt 1)))
+            @?= Right (Just (Polynomial "n" 2), Nothing, Just (["n"], Lit (LInt 1)))
+    ]
+
+toFunctionDataTests = testGroup "toFunctionData tests"
+    [ testCase "fails when complexity uses illegal expressions" $
+        toFunctionData (Just $ If (Lit (LBool True)) (Var "n") (Op Exp (Var "n") (Lit (LInt 2))), Nothing, Just (["n"], basicFuncDefn))
+        @?= Left IllegalComplexity
+    , testCase "fails when complexity uses unsupported expressions" $
+        toFunctionData (Just $ Op Add (Var "n") (Var "m"), Nothing, Just (["n"], basicFuncDefn))
+        @?= Left UnsupportedComplexity
+    , testCase "converts simple expression to complexity" $
+        toFunctionData (Just $ Var "n", Nothing, Just (["n"], basicFuncDefn))
+        @?= Right (Just (Polynomial "n" 1), Nothing, Just (["n"], basicFuncDefn))
+    , testCase "converts complex expression to complexity" $
+        toFunctionData (Just $ Op Exp (Lit (LInt 2)) (Var "n"), Nothing, Just (["n"], basicFuncDefn))
+        @?= Right (Just (Exponential 2 "n"), Nothing, Just (["n"], basicFuncDefn))
     ]
 
 basicFuncDefn = Op Add (Lit (LInt 1)) (Lit (LInt 1))
@@ -91,19 +107,19 @@ basicTypeDecl = Type "foo" [Int, Int]
 aggregateTests = testGroup "aggregate tests"
     [ testCase "forms complete when given cplx, type, func" $
         aggregate [basicCplxDecl, basicTypeDecl, basicFuncDecl]
-            @?= Right (Map.fromList [("foo", (Just (Polynomial "n" 1), Just [Int, Int], Just (["n"], basicFuncDefn)))])
+            @?= Right (Map.fromList [("foo", (Just (Var "n"), Just [Int, Int], Just (["n"], basicFuncDefn)))])
     , testCase "forms complete when given type, cplx, func" $
         aggregate [basicTypeDecl, basicCplxDecl, basicFuncDecl]
-            @?= Right (Map.fromList [("foo", (Just (Polynomial "n" 1), Just [Int, Int], Just (["n"], basicFuncDefn)))])
+            @?= Right (Map.fromList [("foo", (Just (Var "n"), Just [Int, Int], Just (["n"], basicFuncDefn)))])
     , testCase "forms complete when given func, cplx, type" $
         aggregate [basicFuncDecl, basicCplxDecl, basicTypeDecl]
-            @?= Right (Map.fromList [("foo", (Just (Polynomial "n" 1), Just [Int, Int], Just (["n"], basicFuncDefn)))])
+            @?= Right (Map.fromList [("foo", (Just (Var "n"), Just [Int, Int], Just (["n"], basicFuncDefn)))])
     , testCase "forms partial when given func, type" $
         aggregate [basicFuncDecl, basicTypeDecl]
             @?= Right (Map.fromList [("foo", (Nothing, Just [Int, Int], Just (["n"], basicFuncDefn)))])
     , testCase "forms partial when given cplx, type" $
         aggregate [basicCplxDecl, basicTypeDecl]
-            @?= Right (Map.fromList [("foo", (Just (Polynomial "n" 1), Just [Int, Int], Nothing))])
+            @?= Right (Map.fromList [("foo", (Just (Var "n"), Just [Int, Int], Nothing))])
     , testCase "forms only func when given func" $
         aggregate [basicFuncDecl]
             @?= Right (Map.fromList [("foo", (Nothing, Nothing, Just (["n"], basicFuncDefn)))])
@@ -121,14 +137,8 @@ aggregateTests = testGroup "aggregate tests"
             , Cplx "baz" (Op Exp (Lit (LInt 2)) (Var "q"))
             ]
             @?= Right (Map.fromList
-                [ ("foo", (Just (Polynomial "n" 1), Just [Int, Int], Just (["n"], basicFuncDefn)))
-                , ("bar", (Just (Polynomial "m" 1), Just [Bool, Int], Nothing))
-                , ("baz", (Just (Exponential 2 "q"), Nothing, Just (["n"], basicFuncDefn)))
+                [ ("foo", (Just (Var "n"), Just [Int, Int], Just (["n"], basicFuncDefn)))
+                , ("bar", (Just (Var "m"), Just [Bool, Int], Nothing))
+                , ("baz", (Just (Op Exp (Lit (LInt 2)) (Var "q")), Nothing, Just (["n"], basicFuncDefn)))
                 ])
-    , testCase "fails when complexity uses illegal expressions" $
-        aggregate [Cplx "foo" (If (Lit (LBool True)) (Var "n") (Op Exp (Var "n") (Lit (LInt 2))))]
-        @?= Left IllegalComplexity
-    , testCase "fails when complexity is uses unsupported expressions" $
-        aggregate [Cplx "foo" (Op Add (Var "n") (Var "m"))]
-        @?= Left UnsupportedComplexity
     ]
