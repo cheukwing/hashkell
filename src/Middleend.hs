@@ -10,7 +10,7 @@ module Middleend (
     pipeline
 ) where
 
-import Frontend (AggregationTable)
+import Frontend (FunctionTable)
 
 import Hashkell.Syntax
 import Middleend.Cleaner
@@ -22,6 +22,6 @@ import Middleend.DependencyGraph
 -- and removing any unused identifier definitions.
 -- these clean up steps ensure that the encoding instructions generated from the
 -- aggregation table are correct
-pipeline :: Steps -> MergeAtomic -> AggregationTable -> EncodingInstructionTable
+pipeline :: Steps -> MergeAtomic -> FunctionTable -> EncodingInstructionTable
 pipeline steps ma
     = createEncodingInstructionTable steps ma . cleanup

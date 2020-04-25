@@ -1,8 +1,8 @@
 module Frontend (
     Frontend.Error.Error(..),
     Frontend.Complexity.Cplx(..),
-    Frontend.Aggregator.Aggregation(..),
-    Frontend.Aggregator.AggregationTable,
+    Frontend.Verification.FunctionData(..),
+    Frontend.Verification.FunctionTable,
     pipeline,
 ) where
 
@@ -17,5 +17,5 @@ import Data.Either (Either)
 -- pipeline aggregates information for the same function together
 -- and then verifies that the complexity annotation for a function is
 -- valid and compatible
-pipeline :: Prog -> Either Error AggregationTable
+pipeline :: Prog -> Either Error FunctionTable
 pipeline p = aggregate p >>= verify

@@ -1,7 +1,7 @@
 module Middleend.Paralleliser where
 
 import Hashkell.Syntax
-import Frontend (Aggregation(..), Cplx(..), AggregationTable)
+import Frontend (FunctionData(..), Cplx(..), FunctionTable)
 import Middleend.DependencyGraph
 
 import Prelude hiding (GT)
@@ -28,7 +28,7 @@ type EncodingInstructionTable = Map Name EncodingInstruction
 -- parallelisationType takes the steps approximating the overhead from
 -- parallelisation, and the aggregation of a function, to determine whether
 -- it is worth parallelising the function
-parallelisationType :: Steps -> Aggregation -> ParallelisationType
+parallelisationType :: Steps -> FunctionData -> ParallelisationType
 parallelisationType _ (Nothing, _, _)
     = Never
 parallelisationType _ (_, _, Nothing)
@@ -63,7 +63,7 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
 -- parallelisationAndTrivialityTables returns a table with the parallelisation
 -- type of each function, and the triviality of each function (based on the
 -- parallelisationType)
-parallelisationAndTrivialityTables :: Steps -> AggregationTable -> (Map Name ParallelisationType, Map Name Bool)
+parallelisationAndTrivialityTables :: Steps -> FunctionTable -> (Map Name ParallelisationType, Map Name Bool)
 parallelisationAndTrivialityTables steps at
     = (parTable, triTable)
     where
@@ -75,12 +75,12 @@ parallelisationAndTrivialityTables steps at
 -- instructions, which tells the code generator to generate a certain function,
 -- and how to generate that function into Haskell, i.e. whether in sequential
 -- or parallel
-createEncodingInstructionTable :: Steps -> MergeAtomic -> AggregationTable -> EncodingInstructionTable
+createEncodingInstructionTable :: Steps -> MergeAtomic -> FunctionTable -> EncodingInstructionTable
 createEncodingInstructionTable steps ma at
     = foldl aggToInstr Map.empty . Map.toList $ at
     where
         (parTable, triTable) = parallelisationAndTrivialityTables steps at
-        aggToInstr :: EncodingInstructionTable -> (Name, Aggregation) -> EncodingInstructionTable
+        aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
         -- If there is no definition, do not bother encoding at all
         aggToInstr eit (_, (_, _, Nothing))
             = eit

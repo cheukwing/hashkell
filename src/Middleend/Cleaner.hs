@@ -1,7 +1,7 @@
 module Middleend.Cleaner where
 
 import Hashkell.Syntax
-import Frontend (AggregationTable, Aggregation(..))
+import Frontend (FunctionTable, FunctionData(..))
 
 import Control.Monad.State.Strict
 import Data.Map.Strict (Map)
@@ -12,10 +12,10 @@ import Data.List (isPrefixOf, partition)
 import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
 
-cleanup :: AggregationTable -> AggregationTable
+cleanup :: FunctionTable -> FunctionTable
 cleanup = Map.map cleanup'
     where
-        cleanup' :: Aggregation -> Aggregation
+        cleanup' :: FunctionData -> FunctionData
         cleanup' (mcplx, mts, Just (params, e))
             = (mcplx, mts, Just (finalParams, e''))
             where

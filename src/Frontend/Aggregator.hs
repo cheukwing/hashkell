@@ -1,7 +1,6 @@
 module Frontend.Aggregator where
 
 import Hashkell.Syntax
-import Frontend.Complexity
 import Frontend.Error
 
 import Data.Map.Strict (Map)
@@ -9,7 +8,7 @@ import qualified Data.Map.Strict as Map
 import Control.Monad.Except (foldM, throwError)
 
 type Defn = Expr
-type Aggregation = (Maybe Cplx, Maybe [Type], Maybe ([Name], Defn))
+type Aggregation = (Maybe Expr, Maybe [Type], Maybe ([Name], Defn))
 type AggregationTable = Map Name Aggregation
 
 -- aggregate takes the program (a list of declarations) and aggregates
@@ -29,8 +28,7 @@ aggregate = foldM aggregate' Map.empty
                     throwError DuplicateDeclaration
                 Nothing ->
                     return $ Map.insert name (Nothing, Nothing, Just (params, defn)) at
-        aggregate' at (Cplx name c) = do
-            cplx <- parseComplexity c
+        aggregate' at (Cplx name cplx) =
             case Map.lookup name at of
                 Just (Nothing, mts, mfunc) ->
                     return $ Map.insert name (Just cplx, mts, mfunc) at
