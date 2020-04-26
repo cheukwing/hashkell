@@ -48,9 +48,9 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
             Branching $ Op GTE (lhs param)
                 (Lit (LInt (ceiling $ logBase (fromIntegral n) (fromIntegral steps))))
         Factorial param ->
-            -- param! > steps => param >= n (where n! > steps)
+            -- param! > steps => param >= argmin {x | x! > steps}
             Branching $ Op GTE (lhs param)
-                (Lit (LInt (snd . head $ dropWhile (flip (<) 1000 . fst) $ scanl (\(f, i) n -> (f * n, i + 1)) (1, 0) [1..])))
+                (Lit (LInt (snd . head $ dropWhile (flip (<) steps . fst) $ scanl (\(f, i) n -> (f * n, i + 1)) (1, 0) [1..])))
     where
         lhs name = case mts of
                 Just ts -> 
