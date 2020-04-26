@@ -40,13 +40,15 @@ toFunctionData (mc, mts, mfn) = do
 -- is compatible with the other information given for a certain function
 verifyFunctionData :: FunctionData -> Either Error FunctionData
 -- if we just have complexity and types, then if we do have a param in our
--- complexity, ensure that it will have some assigned type
+-- complexity, ensure that it will have some supported assigned type
+-- NOTE: we can use init safely as `ts` would not be parsed if it had no types
 verifyFunctionData fd @ (Just c, Just ts, Nothing)
     = maybe (return fd) 
-        (\_ -> if length ts < 2
+        (\_ -> if null paramTypes || not (any isSupportedType paramTypes)
             then throwError IncompatibleComplexity
             else return fd)
         (paramComplexity c)
+    where paramTypes = init ts
 -- if we just have complexity and definition, then if we do have a param in our
 -- complexity, ensure that it is also present in the params of the definition
 verifyFunctionData fd @ (Just c, Nothing, Just (params, _))
@@ -68,13 +70,15 @@ verifyFunctionData fd @ (Just c, Just ts, Just (params, _))
             . typeOf)
         (paramComplexity c)
     where
-        isSupportedType Bool   = False
-        isSupportedType Int    = True
-        isSupportedType List{} = True
         typeOf name 
-            = case [t | (t, p) <- zip ts params, p == name] of
+            = case [t | (t, p) <- zip (init ts) params, p == name] of
                 (t : _) -> Just t
                 []      -> Nothing
 -- if we do not have a complexity, or just a complexity, then ignore
 verifyFunctionData fd
     = return fd
+
+isSupportedType :: Type -> Bool
+isSupportedType Bool   = False
+isSupportedType Int    = True
+isSupportedType List{} = True

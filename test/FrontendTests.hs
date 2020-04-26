@@ -73,6 +73,15 @@ verifyFunctionDataTests = testGroup "verifyFunctionData tests"
     , testCase "complexity with boolean param is incompatible" $
         verifyFunctionData (Just (Polynomial "n" 2), Just [Bool, Int], Just (["n"], Lit (LInt 1)))
             @?= Left IncompatibleComplexity
+    , testCase "complexity with no param types is incompatible" $
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Int], Nothing)
+            @?= Left IncompatibleComplexity
+    , testCase "complexity with no param types is incompatible (with defn)" $
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Int], Just (["n"], Lit (LInt 1)))
+            @?= Left IncompatibleComplexity
+    , testCase "complexity with unsupported param types is incompatible" $
+        verifyFunctionData (Just (Polynomial "n" 2), Just [Bool, Int], Nothing)
+            @?= Left IncompatibleComplexity
     , testCase "complexity with int param is compatible" $
         verifyFunctionData (Just (Polynomial "n" 2), Just [Int, Int], Just (["n"], Lit (LInt 1)))
             @?= Right (Just (Polynomial "n" 2), Just [Int, Int], Just (["n"], Lit (LInt 1)))
