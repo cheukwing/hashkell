@@ -44,7 +44,7 @@ verifyFunctionData :: FunctionData -> Either Error FunctionData
 -- NOTE: we can use init safely as `ts` would not be parsed if it had no types
 verifyFunctionData fd @ (Just c, Just ts, Nothing)
     = maybe (return fd) 
-        (\_ -> if null paramTypes || not (any isSupportedType paramTypes)
+        (\_ -> if not (any isSupportedType paramTypes)
             then throwError IncompatibleComplexity
             else return fd)
         (paramComplexity c)
