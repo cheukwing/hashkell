@@ -150,7 +150,7 @@ replaceRecursiveCalls n (If e1 e2 e3)
 --      a = 1     b = 1
 --          \    /
 --          a + b
--- will appear as parallelism, even though there calculations are atomic
+-- will appear as parallelism, even though their calculations are atomic
 -- due to the limitations of the dependency graph
 hasParallelism :: DependencyGraph -> Bool
 hasParallelism (ns, ds)
