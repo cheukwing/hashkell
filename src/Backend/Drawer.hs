@@ -30,7 +30,7 @@ graphToDot (ns, ds)
 depGraphParams :: G.GraphvizParams Name DNode DType () DNode
 depGraphParams = G.defaultParams {
     G.fmtNode = \(name, node) -> case node of
-        Scope         -> [G.toLabel $ "Scope \"" ++ name ++ "\""]
+        Scope         -> [G.toLabel $ "Scope " ++ tail name]
         Expression e  -> [G.toLabel $ name ++ " = " ++ dexprToCode e]
         Conditional e -> [G.toLabel $ name ++ " = If " ++ dexprToCode e]
     , G.fmtEdge = \(_, _, t) -> case t of
