@@ -269,12 +269,15 @@ collectApp (App e1 e2)
 -- appear as a single node, avoiding nodes for each bracketing
 -- as in e.g. ((x + y) + z) + w causing 3 nodes
 buildOpExpr :: Expr -> State BuildingState DExpr
-buildOpExpr (Op op e1 e2)
-    = case (atomicToDExpr e1, atomicToDExpr e2) of
-        (Nothing, Nothing)   -> DOp op <$> buildOpExpr e1 <*> buildOpExpr e2
-        (Just de1, Nothing)  -> DOp op de1 <$> buildOpExpr e2
-        (Nothing, Just de2)  -> DOp op <$> buildOpExpr e1 <*> return de2
-        (Just de1, Just de2) -> return $ DOp op de1 de2
+buildOpExpr (Op op e1 e2) = do
+    ma <- mergeAtomic <$> get
+    if ma
+        then case (atomicToDExpr e1, atomicToDExpr e2) of
+            (Nothing, Nothing)   -> DOp op <$> buildOpExpr e1 <*> buildOpExpr e2
+            (Just de1, Nothing)  -> DOp op de1 <$> buildOpExpr e2
+            (Nothing, Just de2)  -> DOp op <$> buildOpExpr e1 <*> return de2
+            (Just de1, Just de2) -> return $ DOp op de1 de2
+        else DOp op <$> buildExpr e1 <*> buildExpr e2
 buildOpExpr e
     = buildExpr e
 
