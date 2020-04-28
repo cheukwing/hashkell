@@ -106,18 +106,6 @@ setScope s = do
     return (currentScope bs)
 
 
--- hasParent checks if the node with the given name has any parent nodes.
-hasParent :: Name -> State BuildingState Bool
-hasParent name = do
-    bs <- get
-    let (_, ds) = dependencyGraph bs
-        scope   = currentScope bs
-        dependencies = Set.filter (\(_, c, t) -> c == name && t == Dep) ds
-    scopedPs <- filterM (\(p, _, _) -> p `isDescendentOf` scope) 
-        (Set.toList dependencies)
-    return (not (null scopedPs))
-
-
 -- addArc inserts a dependency arc into the state
 addArc :: Dependency -> State BuildingState ()
 addArc d = do
@@ -126,61 +114,18 @@ addArc d = do
     put (bs { dependencyGraph = (ns, Set.insert d ds) })
 
 
--- isDescendentOf checks if a is a descendent of b by recursively checking
--- a's parents for b
-isDescendentOf :: Name -> Name -> State BuildingState Bool
-a `isDescendentOf` b = do
-    bs <- get
-    let (_, ds) = dependencyGraph bs
-        pes = Set.filter (\(_, c, t) -> c == a && t == Dep) ds
-        ps  = Set.toList $ Set.map (\(p, _, _) -> p) pes
-    parentsAreDescendent <- or <$> mapM (`isDescendentOf` b) ps
-    -- b being an element of ps is handled in the next call
-    return (a == b || parentsAreDescendent)
-
--- removeSimilarDependencies removes any dependency arcs which will be covered
--- transitively if we were to add the given arc
--- does not remove that arc (if it exists), but will not be a problem since
--- the dependencies are stored in a Set
-removeSimilarDependencies :: Name -> Name -> State BuildingState ()
-removeSimilarDependencies child parent = do
-    bs <- get
-    let (ns, ds) = dependencyGraph bs
-        similars = Set.toList $ Set.filter 
-            (\(p, c, _) -> c == child && p /= parent)
-            ds
-    similars' <- Set.fromList 
-        <$> filterM (\(p, _, _) -> parent `isDescendentOf` p) similars
-    put ( bs { dependencyGraph = (ns, Set.difference ds similars') })
-
-
 -- addDependency adds an arc from parent to child into the state
 addDependency :: Name -> Name -> State BuildingState ()
 addDependency child parent = do
     bs <- get
     let p = if parent `elem` params bs then currentScope bs else parent
-    -- check if we already have the dependency, or it exists transitively
     addArc (p, child, Dep)
-    {-
-    depAlreadyExists <- child `isDescendentOf` p
-    unless depAlreadyExists $ do
-        -- if it does not exist transitively, add the arc then remove any
-        -- dependencies which are now redundandant through transitivity
-        addArc (p, child, Dep)
-        removeSimilarDependencies child p
-    -}
 
 
--- addScopeDependency explicitly adds an arc from the current scope to the 
--- child, if the child is not already a descendent of the scope
+-- addScopeDependency adds an arc from the current scope to the child
 addScopeDependency :: Name -> State BuildingState ()
 addScopeDependency child =
     currentScope <$> get >>= addDependency child
-    {-
-    scope <- currentScope <$> get
-    alreadyDescendent <- return False -- child `isDescendentOf` scope
-    unless alreadyDescendent $ addArc (scope, child, Dep)
-    -}
 
 
 -- addConditionalDependency sets up the dependency arcs for a conditional node,
