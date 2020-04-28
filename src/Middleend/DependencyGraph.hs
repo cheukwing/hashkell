@@ -392,10 +392,7 @@ buildGraphWithName mn (If e1 e2 e3) = do
         -- rearrangeExternalDependencies handles situations where an expression
         -- within a certain scope depends on a let definition outside of this
         -- scope -- e.g. let ... in (if ...)
-        -- this would create a dependency arc from outside the scope, to inside
-        -- the scope, which does not work with the current code generation
-        -- algorithm (TODO?)
-        -- instead, we check if any nodes in the current scope and below have
+        -- we check if any nodes in the current scope and below have
         -- dependencies to some node outside of the scopes, and route that
         -- to link to the Condition node we are currently generating, ensuring
         -- that there are no inter-scope connections

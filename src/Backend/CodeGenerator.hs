@@ -250,7 +250,6 @@ graphToCode g False
         (SequentialEnc g Set.empty)
 graphToCode g True
     = snd $ evalState (graphToParallelCodeSimple "_")
-    -- = snd $ evalState (graphToParallelCodeBacktrack "_")
         (SimpleParallelEnc g Set.empty False)
 
 
