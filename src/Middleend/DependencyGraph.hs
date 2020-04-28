@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Middleend.DependencyGraph where
 
 import Hashkell.Syntax
@@ -12,8 +14,6 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Maybe (Maybe)
 import qualified Data.Maybe as Maybe
-
-import Debug.Trace (trace)
 
 type DependencyGraph = (NodeTable, Dependencies)
 type NodeTable = Map Name DNode
@@ -67,7 +67,7 @@ data BuildingState = BuildingState
 -- given params and definition
 createDependencyGraph :: MergeAtomic -> Map Name Bool -> [Name] -> Expr -> DependencyGraph
 createDependencyGraph ma tt params defn 
-    = dependencyGraph finalState
+    = removeRedundantArcs (dependencyGraph finalState)
     where
         initState = BuildingState
             { dependencyGraph = (Map.fromList [("_", Scope)], Set.empty)
@@ -78,6 +78,24 @@ createDependencyGraph ma tt params defn
             , trivialityTable = tt
             } 
         finalState = execState (buildGraph defn) initState
+
+removeRedundantArcs :: DependencyGraph -> DependencyGraph
+removeRedundantArcs (ns, ds)
+    = (ns, Set.difference ds arcsToRemove)
+    where
+        nodes = Map.keys ns
+        descendents = Map.mapWithKey (\k _ -> Set.delete k (internalNodes ds k)) ns
+        childrens   = Map.mapWithKey (\k _ -> map (\(_, c, _) -> c) $ Set.toList $ Set.filter (\(p, _, t) -> p == k && t == Dep) ds) ns
+        arcsToRemove = foldl findArcsToRemove Set.empty nodes
+        findArcsToRemove :: Set Dependency -> Name -> Set Dependency
+        findArcsToRemove deps n
+            = Set.unions (deps : map findArcsToRemove children)
+            where
+                children = (Map.!) childrens n
+                findArcsToRemove :: Name -> Set Dependency
+                findArcsToRemove child
+                    = Set.fromList $ map (n, , Dep) $ filter (`Set.member` descendent) children
+                    where descendent = (Map.!) descendents child
 
 -- setScope sets the current scope to the given scope, and returns the previous
 -- scope in the state.
@@ -142,21 +160,27 @@ addDependency child parent = do
     bs <- get
     let p = if parent `elem` params bs then currentScope bs else parent
     -- check if we already have the dependency, or it exists transitively
+    addArc (p, child, Dep)
+    {-
     depAlreadyExists <- child `isDescendentOf` p
     unless depAlreadyExists $ do
         -- if it does not exist transitively, add the arc then remove any
         -- dependencies which are now redundandant through transitivity
         addArc (p, child, Dep)
         removeSimilarDependencies child p
+    -}
 
 
 -- addScopeDependency explicitly adds an arc from the current scope to the 
 -- child, if the child is not already a descendent of the scope
 addScopeDependency :: Name -> State BuildingState ()
-addScopeDependency child = do
+addScopeDependency child =
+    currentScope <$> get >>= addDependency child
+    {-
     scope <- currentScope <$> get
-    alreadyDescendent <- child `isDescendentOf` scope
+    alreadyDescendent <- return False -- child `isDescendentOf` scope
     unless alreadyDescendent $ addArc (scope, child, Dep)
+    -}
 
 
 -- addConditionalDependency sets up the dependency arcs for a conditional node,
@@ -400,8 +424,8 @@ buildGraphWithName mn (If e1 e2 e3) = do
             bs <- get
             let (ns, ds) = dependencyGraph bs
                 scope    = currentScope bs
-            internal <- internalNodes scope
-            let externalDeps = Set.filter 
+                internal = internalNodes ds scope
+                externalDeps = Set.filter 
                     (\(p, c, _) -> Set.member c internal 
                         && Set.notMember p internal)
                     ds
@@ -418,10 +442,11 @@ buildGraphWithName mn (If e1 e2 e3) = do
 
 -- internalNodes gets the set of all nodes which are descendents of the
 -- given node
-internalNodes :: Name -> State BuildingState (Set Name)
-internalNodes name = do
-    ds <- snd . dependencyGraph <$> get
-    let bfs :: Set Name -> [Name] -> Set Name
+internalNodes :: Dependencies -> Name -> Set Name
+internalNodes ds name
+    = bfs Set.empty [name]
+    where 
+        bfs :: Set Name -> [Name] -> Set Name
         bfs visited  [] 
             = visited
         bfs visited (n : ns)
@@ -430,4 +455,3 @@ internalNodes name = do
             where children = Set.toList 
                     $ Set.map (\(_, c, _) -> c) 
                     $ Set.filter (\(p, _, _) -> p == n) ds
-    return $ bfs Set.empty [name]
