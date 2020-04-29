@@ -4,6 +4,7 @@ import Frontend
 import Middleend
 import Backend
 import Hashkell.Parser (parseProg)
+import Arguments
 
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -13,65 +14,26 @@ import System.FilePath.Posix as Posix
 import Control.Monad (when)
 import qualified Data.Text.Lazy.IO as TL
 
-data Arguments = Arguments
-    { file           :: [String]
-    , parallelise    :: Bool
-    , steps          :: Int
-    , separateAtomic :: Bool
-    , graph          :: Bool
-    }
-
-arguments :: Parser Arguments
-arguments 
-    = Arguments
-        <$> some (argument str 
-            ( metavar "FILENAMES..." 
-           <> help "The programs to parallelise"))
-        <*> switch
-            ( long "parallelise"
-           <> short 'p'
-           <> help "Whether to parallelise the input programs"
-            )
-        <*> option auto
-            ( long "steps"
-           <> short 's'
-           <> help "The number of steps to set the parallelisation boundary to"
-           <> value 1000 
-            )
-        <*> switch
-            ( long "separate atomic"
-           <> short 'a'
-           <> help "Whether to separate atomic expressions into separate nodes when building the graph"
-            )
-        <*> switch
-            ( long "graph"
-           <> short 'g'
-           <> help "Whether to draw the graph of parallelisable functions"
-            )
 
 main :: IO ()
-main = process =<< execParser args
-    where 
-        args = info (arguments <**> helper)
-                ( fullDesc
-               <> progDesc "Adds parallelisation strategies to Hashkell code"
-               <> header "Hashkell - Haskell with semi-automatic parallelisation"
-                )
+main = runWithArgs process
 
 process :: Arguments -> IO ()
-process (Arguments files parallelise steps sa graph) = do
-    contents <- mapM readFile files
-    let parses = zip files (map parseProg contents)
+process args = do
+    let ctx = argumentsToContext args
+        fs = files args
+    contents <- mapM readFile fs
+    let parses = zip fs (map parseProg contents)
         processSingle n prog =
             case Frontend.pipeline prog of
                 Left err ->
                     putStrLn $ n ++ ": Annotation error - " ++ show err
                 Right at -> do
-                    let eit = Middleend.pipeline steps (not sa) at
-                    when parallelise $
+                    let eit = Middleend.pipeline ctx at
+                    when (parallelise args) $
                         let out = "./out/par_" ++ Posix.takeFileName n
                         in writeFile out (Backend.pipelineEncode eit)
-                    when graph $ 
+                    when (graph args) $ 
                         let drawnGraphs
                                 = Backend.pipelineDraw eit
                             drawnGraphsWithName 

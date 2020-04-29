@@ -3,6 +3,7 @@ module Middleend.Paralleliser where
 import Hashkell.Syntax
 import Frontend (FunctionData(..), Cplx(..), FunctionTable)
 import Middleend.DependencyGraph
+import Context
 
 import Prelude hiding (GT)
 import Data.Map.Strict (Map)
@@ -11,7 +12,6 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List (partition)
 
-type Steps = Int
 data ParallelisationType
     = Always -- Always parallelise
     | Branching Expr -- Parallelise if the condition is met
@@ -60,11 +60,11 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
                 Nothing -> Var name
 
 
--- parallelisationAndTrivialityTables returns a table with the parallelisation
+-- parAndTriTables returns a table with the parallelisation
 -- type of each function, and the triviality of each function (based on the
 -- parallelisationType)
-parallelisationAndTrivialityTables :: Steps -> FunctionTable -> (Map Name ParallelisationType, Map Name Bool)
-parallelisationAndTrivialityTables steps at
+parAndTriTables :: Steps -> FunctionTable -> (Map Name ParallelisationType, Map Name Bool)
+parAndTriTables steps at
     = (parTable, triTable)
     where
         parTable = Map.map (parallelisationType steps) at
@@ -75,11 +75,11 @@ parallelisationAndTrivialityTables steps at
 -- instructions, which tells the code generator to generate a certain function,
 -- and how to generate that function into Haskell, i.e. whether in sequential
 -- or parallel
-createEncodingInstructionTable :: Steps -> MergeAtomic -> FunctionTable -> EncodingInstructionTable
-createEncodingInstructionTable steps ma at
+createEncodingInstructionTable :: Context -> FunctionTable -> EncodingInstructionTable
+createEncodingInstructionTable ctx at
     = foldl aggToInstr Map.empty . Map.toList $ at
     where
-        (parTable, triTable) = parallelisationAndTrivialityTables steps at
+        (parTable, triTable) = parAndTriTables (boundarySteps ctx) at
         aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
         -- If there is no definition, do not bother encoding at all
         aggToInstr eit (_, (_, _, Nothing))
@@ -109,7 +109,7 @@ createEncodingInstructionTable steps ma at
                 (_, _) ->
                     Map.insert name (Sequential mts params defn) eit
             where
-                dg             = createDependencyGraph ma triTable params defn
+                dg             = createDependencyGraph ctx triTable params defn
                 seqName        = name ++ "_seq"
                 par            = Parallel mts params dg
                 parName        = name ++ "_par"

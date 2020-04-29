@@ -7,6 +7,7 @@ import Prelude hiding (EQ, LT, GT)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
+import Context
 import Hashkell.Syntax
 import Frontend (Cplx(..))
 import Middleend.Cleaner (ensureUniqueNames, ensureNoUnusedDefs)
@@ -19,9 +20,11 @@ import Middleend.Paralleliser
     )
 import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..), createDependencyGraph)
 
-_createDependencyGraph = createDependencyGraph True Map.empty
+testContext = Context { boundarySteps = 100, fewerAtomicNodes = True, noRedundantArcs = True }
 
-_createEncodingInstructionTable = createEncodingInstructionTable 100 True
+_createDependencyGraph = createDependencyGraph testContext Map.empty
+
+_createEncodingInstructionTable = createEncodingInstructionTable testContext
 
 middleendTests :: TestTree
 middleendTests = testGroup "Middleend Tests"

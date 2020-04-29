@@ -3,6 +3,7 @@
 module Middleend.DependencyGraph where
 
 import Hashkell.Syntax
+import Context
 
 import Control.Monad.State.Strict
 import Control.Monad (void)
@@ -24,7 +25,6 @@ data DType
     = Dep
     | DepThen
     | DepElse
---    | DepParam
     deriving (Eq, Show, Ord)
 
 data DNode
@@ -49,35 +49,31 @@ data DLit
     deriving (Eq, Show)
 
 
-type Params = [Name]
-type Counter = Int
-type CurrentScope = Name
-type MergeAtomic = Bool
-
 data BuildingState = BuildingState 
     { dependencyGraph :: DependencyGraph
-    , params          :: Params
-    , counter         :: Counter
-    , currentScope    :: CurrentScope
-    , mergeAtomic     ::  MergeAtomic
-    , trivialityTable  :: Map Name Bool
+    , params          :: [Name]
+    , counter         :: Int
+    , currentScope    :: Name
+    , mergeAtomic     :: Bool
+    , trivialityTable :: Map Name Bool
     }
 
 -- createDependencyGraph builds the dependency graph of a function with the
 -- given params and definition
-createDependencyGraph :: MergeAtomic -> Map Name Bool -> [Name] -> Expr -> DependencyGraph
-createDependencyGraph ma tt params defn 
-    = removeRedundantArcs (dependencyGraph finalState)
+createDependencyGraph :: Context -> Map Name Bool -> [Name] -> Expr -> DependencyGraph
+createDependencyGraph ctx tt params defn 
+    = if noRedundantArcs ctx then removeRedundantArcs dg else dg
     where
+        dg = dependencyGraph finalState
+        finalState = execState (buildGraph defn) initState
         initState = BuildingState
             { dependencyGraph = (Map.fromList [("_", Scope)], Set.empty)
             , params = params
             , counter = 0
             , currentScope = "_"
-            , mergeAtomic = ma
+            , mergeAtomic = fewerAtomicNodes ctx
             , trivialityTable = tt
             } 
-        finalState = execState (buildGraph defn) initState
 
 
 -- removeRedundantArcs removes the redundant arcs for each node, i.e. arcs

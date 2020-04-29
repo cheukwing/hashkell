@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 64095d892dc7e3212b3ec374bdfacafdcc018cdcf7f8857c151cdbe62feef863
+-- hash: f5fdf79472f721d74c8fccc479a1a68a8dbfd8403240b3c54156f78c4a389262
 
 name:           hashkell
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
       Backend
       Backend.CodeGenerator
       Backend.Drawer
+      Context
       ExamplePrograms
       Frontend
       Frontend.Aggregator
@@ -62,6 +63,7 @@ library
 executable hashkell-exe
   main-is: Main.hs
   other-modules:
+      Arguments
       Paths_hashkell
   hs-source-dirs:
       app
