@@ -119,7 +119,7 @@ createEncodingInstructionTableAll :: Context -> FunctionTable -> EncodingInstruc
 createEncodingInstructionTableAll ctx ft
     = foldl aggToInstr Map.empty . Map.toList $ ft
     where
-        (parTable, triTable) = parAndTriTables 1 ft
+        (_, triTable) = parAndTriTables (boundarySteps ctx) ft
         aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
         aggToInstr eit (_, (_, _, Nothing))
             = eit
