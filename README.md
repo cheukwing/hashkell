@@ -46,15 +46,13 @@ fib x =
     then 0
     else if x < 2
            then 1
-           else let
-               a = fib (x - 1);
-               b = fib (x - 2)
-           in a + b
+           else fib (x - 1) + fib (x - 2)
+
 ```
 
 ### Generated Dependency Graph
 
-![Dependency graph for the naive fib function](/imgs/naivefibdefgraph.svg "Dependency Graph")
+![Dependency graph for the naive fib function](/imgs/naivefib.svg "Dependency Graph")
 
 ## Time Complexity Annotations
 
