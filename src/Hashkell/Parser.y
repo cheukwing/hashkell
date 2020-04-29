@@ -119,8 +119,8 @@ Atom : '(' Expr ')'                { $2 }
      | '[' ']'                     { Lit (LList []) }
      | '[' List ']'                { Lit (LList $2) }
 
-List : Atom                        { [ $1 ] }
-     | Atom ',' List               { $1 : $3 }
+List : Expr                        { [ $1 ] }
+     | Expr ',' List               { $1 : $3 }
 
 
 {
