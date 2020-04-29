@@ -79,23 +79,36 @@ createDependencyGraph ma tt params defn
             } 
         finalState = execState (buildGraph defn) initState
 
+
+-- removeRedundantArcs removes the redundant arcs for each node, i.e. arcs
+-- which describe transitive relations, by finding which of each nodes children
+-- can be reached from its other children
 removeRedundantArcs :: DependencyGraph -> DependencyGraph
 removeRedundantArcs (ns, ds)
     = (ns, Set.difference ds arcsToRemove)
     where
-        nodes = Map.keys ns
-        descendents = Map.mapWithKey (\k _ -> Set.delete k (internalNodes ds k)) ns
-        childrens   = Map.mapWithKey (\k _ -> map (\(_, c, _) -> c) $ Set.toList $ Set.filter (\(p, _, t) -> p == k && t == Dep) ds) ns
-        arcsToRemove = foldl findArcsToRemove Set.empty nodes
+        -- accumulatively build up a set of all the arcs that are redundant
+        arcsToRemove = foldl findArcsToRemove Set.empty (Map.keys ns)
+        -- get all the descendents of a node
+        descendents = Map.mapWithKey (\n _ -> strictDescendentsOf n) ns
+        strictDescendentsOf n = Set.delete n (internalNodes ds n)
+        -- get all the direct children of a node
+        childrens   = Map.mapWithKey (\n _ -> childrenOf n) ns
+        childrenOf n = Set.map (\(_, c, _) -> c) 
+            $ Set.filter (\(p, _, t) -> p == n && t == Dep) ds
+        -- for each node, add all of its redundant arcs to the accumulative set
         findArcsToRemove :: Set Dependency -> Name -> Set Dependency
         findArcsToRemove deps n
-            = Set.unions (deps : map findArcsToRemove children)
+            = Set.unions (deps : Set.toList (Set.map findArcsToRemove children))
             where
                 children = (Map.!) childrens n
+                -- if a child node can be reached by another child, then the
+                -- arc to the former is redundant
                 findArcsToRemove :: Name -> Set Dependency
                 findArcsToRemove child
-                    = Set.fromList $ map (n, , Dep) $ filter (`Set.member` descendent) children
+                    = Set.map (n, , Dep) $ Set.filter (`Set.member` descendent) children
                     where descendent = (Map.!) descendents child
+
 
 -- setScope sets the current scope to the given scope, and returns the previous
 -- scope in the state.
