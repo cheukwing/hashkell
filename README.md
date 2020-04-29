@@ -22,7 +22,8 @@ The arguments to pass into the program are:
 Hashkell - Haskell with semi-automatic parallelisation
 
 Usage: hashkell-exe FILENAMES... [-p|--parallelise] [-s|--steps ARG]
-                    [-a|--separate atomic] [-g|--graph]
+                    [-a|--separate-atomic] [-r|--keep-redundant] [-g|--graph]
+                    [-A|--draw-all]
   Adds parallelisation strategies to Hashkell code
 
 Available options:
@@ -30,9 +31,16 @@ Available options:
   -p,--parallelise         Whether to parallelise the input programs
   -s,--steps ARG           The number of steps to set the parallelisation
                            boundary to
-  -a,--separate atomic     Whether to separate atomic expressions into separate
-                           nodes when building the graph
+  -a,--separate-atomic     Whether to separate atomic expressions into separate
+                           nodes when building the dependency graph. This is
+                           likely to create a larger graph, exposing more
+                           parallelism than can actually be exploited.
+  -r,--keep-redundant      Whether to keep redundant arcs when building the
+                           dependency graph. This is likely to create a more
+                           cluttered graph, but should not affect the amount of
+                           parallelism actually exposed.
   -g,--graph               Whether to draw the graph of parallelisable functions
+  -A,--draw-all            Whether to draw the graphs of all functions
   -h,--help                Show this help text
 ```
 
