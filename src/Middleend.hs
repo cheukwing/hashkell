@@ -7,7 +7,8 @@ module Middleend (
     Middleend.DependencyGraph.DLit(..),
     Middleend.Paralleliser.EncodingInstructionTable,
     Middleend.Paralleliser.EncodingInstruction(..),
-    pipeline
+    pipeline,
+    pipelineDrawAll
 ) where
 
 import Frontend (FunctionTable)
@@ -26,3 +27,7 @@ import Context
 pipeline :: Context -> FunctionTable -> EncodingInstructionTable
 pipeline ctx
     = createEncodingInstructionTable ctx . cleanup
+
+pipelineDrawAll :: Context -> FunctionTable -> EncodingInstructionTable
+pipelineDrawAll ctx
+    = createEncodingInstructionTableAll ctx . cleanup

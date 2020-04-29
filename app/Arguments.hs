@@ -12,6 +12,7 @@ data Arguments = Arguments
     , separateAtomic :: Bool
     , keepRedundant  :: Bool
     , graph          :: Bool
+    , drawAll        :: Bool
     }
 
 runWithArgs :: (Arguments -> IO()) -> IO ()
@@ -58,6 +59,11 @@ arguments
             ( long "graph"
            <> short 'g'
            <> help "Whether to draw the graph of parallelisable functions"
+            )
+        <*> switch
+            ( long "draw-all"
+           <> short 'A'
+           <> help "Whether to draw the graphs of all functions"
             )
 
 argumentsToContext :: Arguments -> Context

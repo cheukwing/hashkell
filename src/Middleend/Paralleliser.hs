@@ -64,10 +64,10 @@ parallelisationType steps (Just cplx, mts, Just (params, _))
 -- type of each function, and the triviality of each function (based on the
 -- parallelisationType)
 parAndTriTables :: Steps -> FunctionTable -> (Map Name ParallelisationType, Map Name Bool)
-parAndTriTables steps at
+parAndTriTables steps ft
     = (parTable, triTable)
     where
-        parTable = Map.map (parallelisationType steps) at
+        parTable = Map.map (parallelisationType steps) ft
         triTable = Map.map (== Never) parTable
 
 
@@ -76,12 +76,12 @@ parAndTriTables steps at
 -- and how to generate that function into Haskell, i.e. whether in sequential
 -- or parallel
 createEncodingInstructionTable :: Context -> FunctionTable -> EncodingInstructionTable
-createEncodingInstructionTable ctx at
-    = foldl aggToInstr Map.empty . Map.toList $ at
+createEncodingInstructionTable ctx ft
+    = foldl aggToInstr Map.empty . Map.toList $ ft
     where
-        (parTable, triTable) = parAndTriTables (boundarySteps ctx) at
+        (parTable, triTable) = parAndTriTables (boundarySteps ctx) ft
         aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
-        -- If there is no definition, do not bother encoding at all
+        -- If there is no definition, do not bother encoding ft all
         aggToInstr eit (_, (_, _, Nothing))
             = eit
         -- If we have no complexity, just encode it as it was (sequentially)
@@ -114,6 +114,17 @@ createEncodingInstructionTable ctx at
                 par            = Parallel mts params dg
                 parName        = name ++ "_par"
                 callFunction n = foldl (\app a -> App app (Var a)) (Var n) params
+
+createEncodingInstructionTableAll :: Context -> FunctionTable -> EncodingInstructionTable
+createEncodingInstructionTableAll ctx ft
+    = foldl aggToInstr Map.empty . Map.toList $ ft
+    where
+        (parTable, triTable) = parAndTriTables 1 ft
+        aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
+        aggToInstr eit (_, (_, _, Nothing))
+            = eit
+        aggToInstr eit (name, (_, mts, Just (params, defn)))
+            = Map.insert name (Parallel mts params (createDependencyGraph ctx triTable params defn)) eit
 
 
 -- replaceRecursiveCalls changes all the calls to the given name to

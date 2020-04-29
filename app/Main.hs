@@ -33,12 +33,8 @@ process args = do
                     when (parallelise args) $
                         let out = "./out/par_" ++ Posix.takeFileName n
                         in writeFile out (Backend.pipelineEncode eit)
-                    when (graph args) $ 
-                        let drawnGraphs
-                                = Backend.pipelineDraw eit
-                            drawnGraphsWithName 
-                                = map (\(n, t) -> ("./out/" ++ n ++ ".dot", t)) drawnGraphs
-                        in mapM_ (uncurry TL.writeFile) drawnGraphsWithName
+                    when (graph args) (drawToFile eit)
+                    when (drawAll args) (drawToFile $ Middleend.pipelineDrawAll ctx at)
     mapM_ (\(n, pe) -> 
             case pe of
                 Left err -> 
@@ -47,3 +43,12 @@ process args = do
                     processSingle n prog
           )
           parses
+
+drawToFile :: EncodingInstructionTable -> IO ()
+drawToFile eit
+    = mapM_ (uncurry TL.writeFile) drawnGraphsWithName
+    where
+        drawnGraphs
+            = Backend.pipelineDraw eit
+        drawnGraphsWithName
+            = map (\(n, t) -> ("./out/" ++ n ++ ".dot", t)) drawnGraphs
