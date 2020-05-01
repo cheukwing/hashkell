@@ -179,6 +179,7 @@ depName = do
 -- atomicToDExpr returns a DExpr if the expression is atomic, else Nothing
 -- atomic function calls are handled separately in buildExpr because they may
 -- contain non-atomic arguments which need nodes to be built
+{-
 atomicToDExpr :: Expr -> Maybe DExpr
 atomicToDExpr (Lit (LInt i))
     = return $ DLit (DInt i)
@@ -197,6 +198,7 @@ atomicToDExpr (Op op e1 e2) = do
     return $ DOp op e1' e2'
 atomicToDExpr _
     = Nothing
+-}
     
 -- dependenciesFromDExpr returns all the names of the dependencies of the
 -- given DExpr
@@ -243,21 +245,18 @@ collectApp (App e1 e2)
     where (name, es) = collectApp e1
 
 
--- buildOpExpr combines several operations expressions so that they will
+-- buildExpr combines several operations expressions so that they will
 -- appear as a single node, avoiding nodes for each bracketing
 -- as in e.g. ((x + y) + z) + w causing 3 nodes
-buildOpExpr :: Expr -> State BuildingState DExpr
-buildOpExpr (Op op e1 e2) = do
+{-
+buildExpr :: Expr -> State BuildingState DExpr
+buildExpr (Op op e1 e2) = do
     ma <- mergeAtomic <$> get
-    if ma
-        then case (atomicToDExpr e1, atomicToDExpr e2) of
-            (Nothing, Nothing)   -> DOp op <$> buildOpExpr e1 <*> buildOpExpr e2
-            (Just de1, Nothing)  -> DOp op de1 <$> buildOpExpr e2
-            (Nothing, Just de2)  -> DOp op <$> buildOpExpr e1 <*> return de2
-            (Just de1, Just de2) -> return $ DOp op de1 de2
-        else DOp op <$> buildExpr e1 <*> buildExpr e2
-buildOpExpr e
+    let build = if ma then buildExpr else buildExpr
+    DOp op <$> build e1 <*> build e2
+buildExpr e
     = buildExpr e
+-}
 
 -- isTrivialFunction returns True if the given name is the name of an atomic
 -- function, i.e. a O(1) in-built function, or of a function which the user
@@ -277,22 +276,26 @@ buildExpr e = do
     ma <- mergeAtomic <$> get
     if not ma
         then DVar <$> buildGraph e
-        else 
-            case (atomicToDExpr e, e) of
-                -- if atomic, then can just return dexpr for embedding
-                (Just de, _)    -> return de
-                (_, e' @ App{}) -> do
-                    let (fName, args) = collectApp e
-                    isTrivial <- isTrivialFunction fName
-                    if isTrivial
-                        -- if the function is atomic or trivial to compute,
-                        -- then can just return dexpr for embedding
-                        then DAtomApp fName <$> mapM buildExpr args
-                        -- otherwise, build the node as usual
-                        else buildNode
-                -- if not atomic, build the node
-                _               -> buildNode
-            where buildNode = DVar <$> buildGraph e
+        else case e of
+            Lit (LInt i) -> 
+                return $ DLit (DInt i)
+            Lit (LBool b) ->
+                return $ DLit (DBool b)
+            Lit (LList ls) ->
+                DLit <$> (DList <$> mapM buildExpr ls)
+            Var n ->
+                return $ DVar n
+            Op op e1 e2 ->
+                -- handles embedding atomics interleaved between non-atomics
+                DOp op <$> buildExpr e1 <*> buildExpr e2
+            App _ _ -> do
+                let (fName, args) = collectApp e
+                isTrivial <- isTrivialFunction fName
+                if isTrivial
+                    then DAtomApp fName <$> mapM buildExpr args
+                    else DVar <$> buildGraph e
+            _ ->
+                DVar <$> buildGraph e
 
 
 -- buildGraph builds a node for the given expression with a unique
@@ -323,20 +326,18 @@ buildGraphWithName mn (Var var) = do
     -- TODO: some way of determining whether this is actually someFunc/0
     setupExpressionNode name (DVar var)
     return name
-buildGraphWithName mn e @ Op{} = do
+buildGraphWithName mn (Op op e1 e2) = do
     name <- Maybe.maybe depName return mn
-    -- operations are atomic, and will be the combination of multiple atomic
-    -- expressions or already-calculated Vars, so we can combine them
-    dexpr <- buildOpExpr e
+    dexpr <- DOp op <$> buildExpr e1 <*> buildExpr e2
     setupExpressionNode name dexpr
     return name
 buildGraphWithName mn e @ App{} = do
     name <- Maybe.maybe depName return mn
     -- collect the name of the function and its given arguments
     let (fName, args @ (a : as)) = collectApp e
-    -- build the nodes for the arguments
     isTrivial <- isTrivialFunction fName
     dexpr <- if isTrivial
+        -- if trivial -> DAtomApp
         then DAtomApp fName <$> mapM buildExpr args
         else if fName `elem` ["map", "zipWith"]
             then do
@@ -345,7 +346,9 @@ buildGraphWithName mn e @ App{} = do
                         Var n ->  (n, [])
                 isTrivial' <- isTrivialFunction fName'
                 let dfunc = if isTrivial' then DAtomApp else DApp
+                -- if higher order function -> DHighApp
                 DHighApp fName <$> (dfunc fName' <$> mapM buildExpr args') <*> mapM buildExpr as
+            -- anything else -> DApp
             else DApp fName <$> mapM buildExpr args
     -- setup this node
     setupExpressionNode name dexpr

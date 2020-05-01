@@ -831,4 +831,16 @@ createDependencyGraphTests = testGroup "_createDependencyGraph tests"
                     , ("_x1", "_x0", Dep)
                     ]
                 )
+    , testCase "function calls embed atomic expressions" $
+        _createDependencyGraph ["n"]
+            (App (App (App (Var "schwoop") (App (Var "head") (Var "n")))
+                (Op Add (App (Var "head") (Var "n")) (Lit (LInt 1))))
+                (Op Add (Op Add (App (Var "head") (Var "n")) (Lit (LInt 1))) (Lit (LInt 1)))
+            )
+        @?= ( Map.fromList
+                [ ("_", Scope)
+                , ("_x0", Expression (DApp "schwoop" [DAtomApp "head" [DVar "n"], DOp Add (DAtomApp "head" [DVar "n"]) (DLit (DInt 1)), DOp Add (DOp Add (DAtomApp "head" [DVar "n"]) (DLit (DInt 1))) (DLit (DInt 1))]))
+                ]
+            , Set.fromList [ ("_", "_x0", Dep)]
+            )
     ]
