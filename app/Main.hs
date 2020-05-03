@@ -16,8 +16,12 @@ import qualified Data.Text.Lazy.IO as TL
 
 
 main :: IO ()
-main = runWithArgs process
+--main = runWithArgs process
+main = do
+    args <- parseArgs
+    putStrLn "help"
 
+{-
 process :: Arguments -> IO ()
 process args = do
     let ctx = argumentsToContext args
@@ -52,3 +56,4 @@ drawToFile eit
             = Backend.pipelineDraw eit
         drawnGraphsWithName
             = map (\(n, t) -> ("./out/" ++ n ++ ".dot", t)) drawnGraphs
+-}
