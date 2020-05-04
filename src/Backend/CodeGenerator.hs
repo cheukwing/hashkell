@@ -253,7 +253,7 @@ graphToCode g True
     = snd $ evalState (graphToParallelCodeAll "_")
         (BasicState g Set.empty)
 -}
-    = snd $ evalState (graphToParallelCodeApps "_")
+    = snd $ evalState (graphToParallelCodeCalls "_")
         (ScopedState g Set.empty False)
 {-
     = code
@@ -386,12 +386,12 @@ graphToParallelCodeAll name = do
             return (lastName, endCode)
 
     
-graphToParallelCodeApps :: Name -> State GenerationState (Name, Code)
-graphToParallelCodeApps name = do
+graphToParallelCodeCalls :: Name -> State GenerationState (Name, Code)
+graphToParallelCodeCalls name = do
     updateGeneratedNames name
     node <- getNode name
     let generateChildren = do
-            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeApps)
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeCalls)
             let lastName = if null lns then name else last lns
             return (lastName, intercalate "; " cs)
     case node of
@@ -420,8 +420,8 @@ graphToParallelCodeApps name = do
                 then return (lastName, expCode)
                 else return (lastName, expCode ++ "; " ++ code)
         Conditional e -> do
-            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeApps
-            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeApps
+            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeCalls
+            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeCalls
             (lastName, code) <- generateChildren
             par <- getParallelisedScope
             let condCode = name ++ " = if " ++ dexprToCode e 
@@ -439,6 +439,9 @@ graphToParallelCodeBacktrack name = do
             numChildren <- Set.size <$> getChildren name
             (lns, cs, ps) <- unzip3 <$> mapM graphToParallelCodeBacktrack satisfied
             let lastName = if null lns then name else last lns
+                -- a node is in an alternative path if it has unsatisfied
+                -- children, or the last child traversed was part of an
+                -- alternative path
                 isAltPath = (numChildren /= 0) && ((numChildren > length satisfied) || last ps)
             return (lastName, intercalate "; " cs, isAltPath)
     case node of
@@ -456,6 +459,8 @@ graphToParallelCodeBacktrack name = do
             par <- getParallelisedScope
             lenChildren <- Set.size <$> getChildren name
             let expCode
+                    -- if we are in a parallelised scope and an alternative
+                    -- path, we parallelise all function calls
                     | par && isAltPath = case e of
                         DHighApp _ DApp{} _ ->
                             name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
@@ -463,6 +468,7 @@ graphToParallelCodeBacktrack name = do
                             name ++ " <- rpar " ++ parenthesisedDExprToCode e
                         _ ->
                             "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
+                    -- if just a parallelised scope, everything is a definition
                     | par              = "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     | otherwise        = name ++ " = " ++ dexprToCode e
             if null code
