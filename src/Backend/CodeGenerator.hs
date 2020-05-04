@@ -358,33 +358,32 @@ graphToParallelCodeAll name = do
     node <- getNode name
     let generateChildren = do
             (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeAll)
-            let mLastName = if null lns then Nothing else Just (last lns)
-            return (mLastName, intercalate "; " cs)
+            let lastName = if null lns then name else last lns
+            return (lastName, intercalate "; " cs)
     case node of
         Scope -> do
-            (mLastName, code) <- generateChildren
-            let lastName = Maybe.fromJust mLastName
-                finalCode = "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
+            (lastName, code) <- generateChildren
+            let finalCode = "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
             return (lastName, finalCode)
         Expression e -> do
-            (mLastName, code) <- generateChildren
+            (lastName, code) <- generateChildren
             let expCode = case e of
                     DHighApp _ DApp{} _ ->
                         name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
                     _ ->
                         name ++ " <- rpar " ++ parenthesisedDExprToCode e
-            case mLastName of
-                Just lastName -> return (lastName, expCode ++ "; " ++ code)
-                Nothing       -> return (name, expCode)
+            if null code
+                then return (lastName, expCode)
+                else return (lastName, expCode ++ "; " ++ code)
         Conditional e -> do
             (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeAll
             (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeAll
-            (mLastName, code) <- generateChildren
+            (lastName, code) <- generateChildren
             let condCode = name ++ " <- rpar (if " ++ dexprToCode e 
                             ++ " then " ++ thenCode 
                             ++ " else " ++ elseCode  ++ ")"
                 endCode = if null code then condCode else condCode ++ "; " ++ code
-            return (Maybe.fromMaybe name mLastName, endCode)
+            return (lastName, endCode)
 
     
 graphToParallelCodeApps :: Name -> State GenerationState (Name, Code)
@@ -469,26 +468,6 @@ graphToParallelCodeBacktrack name = do
             if null code
                 then return (lastName, expCode, isAltPath)
                 else return (lastName, expCode ++ "; " ++ code, isAltPath)
-            {-
-            let expCode = case (mLastName, par, e) of
-                    -- if in a parallelised scope and a higher order function
-                    (_, True, DHighApp _ DApp{} _) ->
-                        name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
-                    -- if in a parallelised scope but did not generate any children
-                    (Nothing, True, _) ->
-                        if lenChildren > 0
-                            -- if still have unsatisfied children
-                            then name ++ " <- rpar " ++ parenthesisedDExprToCode e
-                            -- leaf
-                            else "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                    -- in parallelised scope and generated children, not a leaf
-                    (_, True, _) -> "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                    -- not parallelised scope
-                    _         -> name ++ " = " ++ dexprToCode e
-            case mLastName of
-                Just lastName -> return (lastName, expCode ++ "; " ++ code)
-                Nothing       -> return (name, expCode)
-            -}
         Conditional e -> do
             (_, thenCode, _) <- getBranch name DepThen >>= graphToParallelCodeBacktrack
             (_, elseCode, _) <- getBranch name DepElse >>= graphToParallelCodeBacktrack
