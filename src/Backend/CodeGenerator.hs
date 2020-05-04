@@ -165,29 +165,29 @@ type GeneratedNames = Set Name
 type ParallelisedScope = Bool
 
 data GenerationState 
-    = SequentialEnc DependencyGraph GeneratedNames
-    | SimpleParallelEnc DependencyGraph GeneratedNames ParallelisedScope
+    = BasicState DependencyGraph GeneratedNames
+    | ScopedState DependencyGraph GeneratedNames ParallelisedScope
 
 getDependencies :: State GenerationState (Set Dependency)
 getDependencies = do
     s <- get
     return $ case s of
-        SequentialEnc (_, ds) _       -> ds
-        SimpleParallelEnc (_, ds) _ _ -> ds
+        BasicState (_, ds) _ -> ds
+        ScopedState (_, ds) _ _ -> ds
 
 getGeneratedNames :: State GenerationState GeneratedNames
 getGeneratedNames = do
     s <- get
     return $ case s of
-        SequentialEnc _ gn       -> gn
-        SimpleParallelEnc _ gn _ -> gn
+        BasicState _ gn -> gn
+        ScopedState _ gn _ -> gn
 
 getNodeTable :: State GenerationState (Map Name DNode)
 getNodeTable = do
     s <- get
     return $ case s of
-        SequentialEnc (ns, _) _       -> ns
-        SimpleParallelEnc (ns, _) _ _ -> ns
+        BasicState (ns, _) _ -> ns
+        ScopedState (ns, _) _ _ -> ns
 
 -- getChildren returns a set of all children of the given node, except those
 -- with conditional dependencies.
@@ -236,10 +236,10 @@ updateGeneratedNames :: Name -> State GenerationState ()
 updateGeneratedNames gn = do
     s <- get
     case s of
-        SequentialEnc dg gns 
-            -> put (SequentialEnc dg (Set.insert gn gns))
-        SimpleParallelEnc dg gns par
-            -> put (SimpleParallelEnc dg (Set.insert gn gns) par)
+        BasicState dg gns 
+            -> put (BasicState dg (Set.insert gn gns))
+        ScopedState dg gns par
+            -> put (ScopedState dg (Set.insert gn gns) par)
 
 
 -- graphToCode generates code from the given dependency graph,
@@ -247,10 +247,18 @@ updateGeneratedNames gn = do
 graphToCode :: DependencyGraph -> Bool -> Code
 graphToCode g False
     = snd $ evalState (graphToSequentialCode "_") 
-        (SequentialEnc g Set.empty)
+        (BasicState g Set.empty)
 graphToCode g True
-    = snd $ evalState (graphToParallelCodeSimple "_")
-        (SimpleParallelEnc g Set.empty False)
+{-
+    = snd $ evalState (graphToParallelCodeAll "_")
+        (BasicState g Set.empty)
+-}
+    = snd $ evalState (graphToParallelCodeApps "_")
+        (ScopedState g Set.empty False)
+{-
+    = code
+    where (_, code, _) = evalState (graphToParallelCodeBacktrack "_") (ScopedState g Set.empty False)
+-}
 
 
 graphToSequentialCode :: Name -> State GenerationState (Name, Code)
@@ -295,8 +303,8 @@ setParallelisedScope :: Bool -> State GenerationState Bool
 setParallelisedScope par = do
     s <- get
     case s of
-        SimpleParallelEnc dg gns par' ->
-            put (SimpleParallelEnc dg gns par) >> return par'
+        ScopedState dg gns par' ->
+            put (ScopedState dg gns par) >> return par'
 
 -- getParallelisedScope retrieves the bool determining whether the current code
 -- in the current scope in the graph should be parallelised.
@@ -304,7 +312,7 @@ getParallelisedScope :: State GenerationState Bool
 getParallelisedScope = do
     s <- get
     case s of
-        SimpleParallelEnc _ _ par -> return par
+        ScopedState _ _ par -> return par
 
 
 -- scopeContainsParallelism returns whether the current scope in the graph
@@ -344,97 +352,150 @@ scopeContainsParallelism start
                 Expression DHighApp{}                -> return True
                 _                                    -> checkChildren
 
-    
-graphToParallelCodeSimple :: Name -> State GenerationState (Name, Code)
-graphToParallelCodeSimple name = do
+graphToParallelCodeAll :: Name -> State GenerationState (Name, Code)
+graphToParallelCodeAll name = do
     updateGeneratedNames name
     node <- getNode name
     let generateChildren = do
-            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeSimple)
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeAll)
             let mLastName = if null lns then Nothing else Just (last lns)
             return (mLastName, intercalate "; " cs)
     case node of
         Scope -> do
-            par <- scopeContainsParallelism name
-            oldPar <- setParallelisedScope par
             (mLastName, code) <- generateChildren
             let lastName = Maybe.fromJust mLastName
+                finalCode = "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
+            return (lastName, finalCode)
+        Expression e -> do
+            (mLastName, code) <- generateChildren
+            let expCode = case e of
+                    DHighApp _ DApp{} _ ->
+                        name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
+                    _ ->
+                        name ++ " <- rpar " ++ parenthesisedDExprToCode e
+            case mLastName of
+                Just lastName -> return (lastName, expCode ++ "; " ++ code)
+                Nothing       -> return (name, expCode)
+        Conditional e -> do
+            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeAll
+            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeAll
+            (mLastName, code) <- generateChildren
+            let condCode = name ++ " <- rpar (if " ++ dexprToCode e 
+                            ++ " then " ++ thenCode 
+                            ++ " else " ++ elseCode  ++ ")"
+                endCode = if null code then condCode else condCode ++ "; " ++ code
+            return (Maybe.fromMaybe name mLastName, endCode)
+
+    
+graphToParallelCodeApps :: Name -> State GenerationState (Name, Code)
+graphToParallelCodeApps name = do
+    updateGeneratedNames name
+    node <- getNode name
+    let generateChildren = do
+            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeApps)
+            let lastName = if null lns then name else last lns
+            return (lastName, intercalate "; " cs)
+    case node of
+        Scope -> do
+            par <- scopeContainsParallelism name
+            oldPar <- setParallelisedScope par
+            (lastName, code) <- generateChildren
             setParallelisedScope oldPar
             let finalCode = if par
                 then "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
                 else "let " ++ code ++ " in " ++ lastName
             return (lastName, finalCode)
         Expression e -> do
-            (mLastName, code) <- generateChildren
+            (lastName, code) <- generateChildren
             par <- getParallelisedScope
-            let expCode = case (par, e) of
-                    (True, DApp{}) ->
-                        name ++ " <- rpar " ++ parenthesisedDExprToCode e
-                    (True, DHighApp _ DApp{} _) ->
-                        name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
-                    (True, _)        ->
-                        "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                    _                ->
-                        name ++ " = " ++ dexprToCode e
-            case mLastName of
-                Just lastName -> return (lastName, expCode ++ "; " ++ code)
-                Nothing       -> return (name, expCode)
+            let expCode = if par
+                    then case e of
+                        DApp{} ->
+                            name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                        DHighApp _ DApp{} _ ->
+                            name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
+                        _ ->
+                            "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
+                    else name ++ " = " ++ dexprToCode e
+            if null code
+                then return (lastName, expCode)
+                else return (lastName, expCode ++ "; " ++ code)
         Conditional e -> do
-            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeSimple
-            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeSimple
-            (mLastName, code) <- generateChildren
+            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeApps
+            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeApps
+            (lastName, code) <- generateChildren
             par <- getParallelisedScope
             let condCode = name ++ " = if " ++ dexprToCode e 
                             ++ " then " ++ thenCode 
                             ++ " else " ++ elseCode 
             let endCode = if par then "let { " ++ condCode ++ " }" else condCode
-            return (Maybe.fromMaybe name mLastName, endCode ++ "; " ++ code)
+            return (lastName, endCode ++ "; " ++ code)
 
-graphToParallelCodeBacktrack :: Name -> State GenerationState (Name, Code)
+graphToParallelCodeBacktrack :: Name -> State GenerationState (Name, Code, Bool)
 graphToParallelCodeBacktrack name = do
     updateGeneratedNames name
     node <- getNode name
     let generateChildren = do
-            (lns, cs) <- unzip <$> (satisfiedChildren name >>= mapM graphToParallelCodeBacktrack)
-            let mLastName = if null lns then Nothing else Just (last lns)
-            return (mLastName, intercalate "; " cs)
+            satisfied <- satisfiedChildren name
+            numChildren <- Set.size <$> getChildren name
+            (lns, cs, ps) <- unzip3 <$> mapM graphToParallelCodeBacktrack satisfied
+            let lastName = if null lns then name else last lns
+                isAltPath = (numChildren /= 0) && ((numChildren > length satisfied) || last ps)
+            return (lastName, intercalate "; " cs, isAltPath)
     case node of
         Scope -> do
             par <- scopeContainsParallelism name
             oldPar <- setParallelisedScope par
-            (mLastName, code) <- generateChildren
-            let lastName = Maybe.fromJust mLastName
+            (lastName, code, _) <- generateChildren
             setParallelisedScope oldPar
             let finalCode = if par
                 then "runEval $ do { " ++ code ++ "; return " ++  lastName ++ "}"
                 else "let " ++ code ++ " in " ++ lastName
-            return (lastName, finalCode)
+            return ("", finalCode, False)
         Expression e -> do
-            (mLastName, code) <- generateChildren
+            (lastName, code, isAltPath) <- generateChildren
             par <- getParallelisedScope
             lenChildren <- Set.size <$> getChildren name
-            let expCode = case (mLastName, par) of
-                    -- did not generate any children, but are in parallelised scope
-                    (Nothing, True) ->
+            let expCode
+                    | par && isAltPath = case e of
+                        DHighApp _ DApp{} _ ->
+                            name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
+                        DApp{} ->
+                            name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                        _ ->
+                            "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
+                    | par              = "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
+                    | otherwise        = name ++ " = " ++ dexprToCode e
+            if null code
+                then return (lastName, expCode, isAltPath)
+                else return (lastName, expCode ++ "; " ++ code, isAltPath)
+            {-
+            let expCode = case (mLastName, par, e) of
+                    -- if in a parallelised scope and a higher order function
+                    (_, True, DHighApp _ DApp{} _) ->
+                        name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
+                    -- if in a parallelised scope but did not generate any children
+                    (Nothing, True, _) ->
                         if lenChildren > 0
                             -- if still have unsatisfied children
-                            then name ++ " <- rpar (" ++ dexprToCode e ++ ")"
+                            then name ++ " <- rpar " ++ parenthesisedDExprToCode e
                             -- leaf
                             else "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     -- in parallelised scope and generated children, not a leaf
-                    (_, True) -> "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
+                    (_, True, _) -> "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
                     -- not parallelised scope
                     _         -> name ++ " = " ++ dexprToCode e
             case mLastName of
                 Just lastName -> return (lastName, expCode ++ "; " ++ code)
                 Nothing       -> return (name, expCode)
+            -}
         Conditional e -> do
-            (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeBacktrack
-            (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeBacktrack
-            (mLastName, code) <- generateChildren
+            (_, thenCode, _) <- getBranch name DepThen >>= graphToParallelCodeBacktrack
+            (_, elseCode, _) <- getBranch name DepElse >>= graphToParallelCodeBacktrack
+            (lastName, code, isAltPath) <- generateChildren
             par <- getParallelisedScope
             let condCode = name ++ " = if " ++ dexprToCode e 
                             ++ " then " ++ thenCode 
                             ++ " else " ++ elseCode 
             let endCode = if par then "let { " ++ condCode ++ " }" else condCode
-            return (Maybe.fromMaybe name mLastName, endCode ++ "; " ++ code)
+            return (lastName, endCode ++ "; " ++ code, isAltPath)
