@@ -257,7 +257,7 @@ graphToCode g True
         (ScopedState g Set.empty False)
 {-
     = code
-    where (_, code, _) = evalState (graphToParallelCodeBacktrack "_") (ScopedState g Set.empty False)
+    where (_, code, _) = evalState (graphToParallelCodePathed "_") (ScopedState g Set.empty False)
 -}
 
 
@@ -430,14 +430,14 @@ graphToParallelCodeCalls name = do
             let endCode = if par then "let { " ++ condCode ++ " }" else condCode
             return (lastName, endCode ++ "; " ++ code)
 
-graphToParallelCodeBacktrack :: Name -> State GenerationState (Name, Code, Bool)
-graphToParallelCodeBacktrack name = do
+graphToParallelCodePathed :: Name -> State GenerationState (Name, Code, Bool)
+graphToParallelCodePathed name = do
     updateGeneratedNames name
     node <- getNode name
     let generateChildren = do
             satisfied <- satisfiedChildren name
             numChildren <- Set.size <$> getChildren name
-            (lns, cs, ps) <- unzip3 <$> mapM graphToParallelCodeBacktrack satisfied
+            (lns, cs, ps) <- unzip3 <$> mapM graphToParallelCodePathed satisfied
             let lastName = if null lns then name else last lns
                 -- a node is in an alternative path if it has unsatisfied
                 -- children, or the last child traversed was part of an
@@ -458,25 +458,28 @@ graphToParallelCodeBacktrack name = do
             (lastName, code, isAltPath) <- generateChildren
             par <- getParallelisedScope
             lenChildren <- Set.size <$> getChildren name
-            let expCode
-                    -- if we are in a parallelised scope and an alternative
-                    -- path, we parallelise all function calls
-                    | par && isAltPath = case e of
-                        DHighApp _ DApp{} _ ->
+            let expCode = 
+                    case (par, isAltPath, e) of
+                        -- always parallelise higher order function if in
+                        -- parallelised scope
+                        (True, _, DHighApp _ DApp{} _) ->
                             name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
-                        DApp{} ->
+                        -- parallelise function calls if in parallelised scope
+                        -- and alternative path
+                        (True, True, DApp{}) ->
                             name ++ " <- rpar " ++ parenthesisedDExprToCode e
-                        _ ->
+                        -- do not parallelise if in a parallelised scope but
+                        -- in the main path
+                        (True, _, _) ->
                             "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                    -- if just a parallelised scope, everything is a definition
-                    | par              = "let { " ++ name ++ " = " ++ dexprToCode e ++ " }"
-                    | otherwise        = name ++ " = " ++ dexprToCode e
+                        (False, _, _) ->
+                            name ++ " = " ++ dexprToCode e
             if null code
                 then return (lastName, expCode, isAltPath)
                 else return (lastName, expCode ++ "; " ++ code, isAltPath)
         Conditional e -> do
-            (_, thenCode, _) <- getBranch name DepThen >>= graphToParallelCodeBacktrack
-            (_, elseCode, _) <- getBranch name DepElse >>= graphToParallelCodeBacktrack
+            (_, thenCode, _) <- getBranch name DepThen >>= graphToParallelCodePathed
+            (_, elseCode, _) <- getBranch name DepElse >>= graphToParallelCodePathed
             (lastName, code, isAltPath) <- generateChildren
             par <- getParallelisedScope
             let condCode = name ++ " = if " ++ dexprToCode e 
