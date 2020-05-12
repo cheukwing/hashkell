@@ -19,7 +19,7 @@ main :: IO ()
 --main = runWithArgs process
 main = do
     args <- parseArgs
-    putStrLn "help"
+    putStrLn $ show args
 
 {-
 process :: Arguments -> IO ()
