@@ -28,11 +28,3 @@ pipeline ctx
     = if ctxDrawAll ctx
         then createEncodingInstructionTableAll ctx . cleanup
         else createEncodingInstructionTable ctx . cleanup
-
-
--- pipeline ctx
---     = createEncodingInstructionTable ctx . cleanup
-
--- pipelineDrawAll :: Context -> FunctionTable -> EncodingInstructionTable
--- pipelineDrawAll ctx
---     = createEncodingInstructionTableAll ctx . cleanup

@@ -1,11 +1,7 @@
 module Arguments (
     parseArgs,
     fileName,
-    toContext,
-    Args(..),
-    CommonOpts(..),
-    GraphOpts(..),
-    ParalleliseOpts(..)
+    toContext
 ) where
 
 import Context

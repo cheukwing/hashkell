@@ -20,13 +20,13 @@ pipeline ctx
         else pipelineEncode ctx
 
 
--- pipelineEncode returns the Haskell encoding using all the 
--- given encoding instructions
+-- pipelineEncode encodes the encoding instructions into Haskell, and then
+-- writes to the file given in the context
 pipelineEncode :: Context -> EncodingInstructionTable -> IO ()
 pipelineEncode ctx eit = writeFile (ctxOutput ctx) (encode ctx eit)
 
--- pipelineDraw returns the GraphVizDot graphs of all the functions
--- which should be parallelised (have dependency graphs)
+-- pipelineDraw creates GraphVizDot graphs of all the functions
+-- which have dependency graphs, and writes them to a file
 pipelineDraw :: EncodingInstructionTable -> IO ()
 pipelineDraw eit 
     = mapM_ (uncurry TL.writeFile) ngs
