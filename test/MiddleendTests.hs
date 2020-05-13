@@ -20,7 +20,14 @@ import Middleend.Paralleliser
     )
 import Middleend.DependencyGraph (DType(..), DNode(..), DLit(..), DExpr(..), createDependencyGraph)
 
-testContext = Context { boundarySteps = 100, fewerAtomicNodes = True, noRedundantArcs = True }
+testContext = Context 
+    { ctxSteps = 100
+    , ctxAtomic = False
+    , ctxRedundant = False
+    , ctxParType = FunctionOnly
+    , ctxDrawAll = False
+    , ctxOutput = "filler"
+    }
 
 _createDependencyGraph = createDependencyGraph testContext Map.empty
 

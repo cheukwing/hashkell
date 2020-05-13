@@ -8,7 +8,6 @@ module Middleend (
     Middleend.Paralleliser.EncodingInstructionTable,
     Middleend.Paralleliser.EncodingInstruction(..),
     pipeline,
-    pipelineDrawAll
 ) where
 
 import Frontend (FunctionTable)
@@ -26,8 +25,6 @@ import Context
 -- aggregation table are correct
 pipeline :: Context -> FunctionTable -> EncodingInstructionTable
 pipeline ctx
-    = createEncodingInstructionTable ctx . cleanup
-
-pipelineDrawAll :: Context -> FunctionTable -> EncodingInstructionTable
-pipelineDrawAll ctx
-    = createEncodingInstructionTableAll ctx . cleanup
+    = if ctxDrawAll ctx
+        then createEncodingInstructionTableAll ctx . cleanup
+        else createEncodingInstructionTable ctx . cleanup

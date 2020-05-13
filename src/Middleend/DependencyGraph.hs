@@ -62,7 +62,7 @@ data BuildingState = BuildingState
 -- given params and definition
 createDependencyGraph :: Context -> Map Name Bool -> [Name] -> Expr -> DependencyGraph
 createDependencyGraph ctx tt params defn 
-    = if noRedundantArcs ctx then removeRedundantArcs dg else dg
+    = if ctxRedundant ctx then dg else removeRedundantArcs dg
     where
         dg = dependencyGraph finalState
         finalState = execState (buildGraph defn) initState
@@ -71,7 +71,7 @@ createDependencyGraph ctx tt params defn
             , params = params
             , counter = 0
             , currentScope = "_"
-            , mergeAtomic = fewerAtomicNodes ctx
+            , mergeAtomic = not (ctxAtomic ctx)
             , trivialityTable = tt
             } 
 
