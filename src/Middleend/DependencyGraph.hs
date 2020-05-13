@@ -71,7 +71,7 @@ createDependencyGraph ctx tt params defn
             , params = params
             , counter = 0
             , currentScope = "_"
-            , mergeAtomic = ctxAtomic ctx
+            , mergeAtomic = not (ctxAtomic ctx)
             , trivialityTable = tt
             } 
 

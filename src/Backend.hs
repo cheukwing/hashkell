@@ -10,6 +10,8 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TL
 import qualified Data.Map.Strict as Map
 
+import Debug.Trace (trace)
+
 
 pipeline :: Context -> EncodingInstructionTable -> IO ()
 pipeline ctx
@@ -29,5 +31,5 @@ pipelineDraw :: EncodingInstructionTable -> IO ()
 pipelineDraw eit 
     = mapM_ (uncurry TL.writeFile) ngs
     where
-        ngs = [ ("./out" ++ name ++ ".dot", graphToDot dg) 
+        ngs = [ ("./out/" ++ name ++ ".dot", graphToDot dg) 
                 | (name, Parallel _ _ dg) <- Map.toList eit ]

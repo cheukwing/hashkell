@@ -27,7 +27,7 @@ main = do
         Right prog -> 
             case process ctx prog of
                 Left err -> putStrLn $ "Encountered an error: " ++ show err
-                Right _ -> putStrLn "Done."
+                Right io -> io >> putStrLn "Done."
 
 process :: Context -> Prog -> Either Error (IO ())
 process ctx prog = do
