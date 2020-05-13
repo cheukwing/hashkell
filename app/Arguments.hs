@@ -1,5 +1,7 @@
 module Arguments (
     parseArgs,
+    fileName,
+    toContext,
     Args(..),
     CommonOpts(..),
     GraphOpts(..),
@@ -10,6 +12,8 @@ import Context
 
 import Options.Applicative
 import Data.Semigroup ((<>))
+import qualified Data.Maybe as Maybe
+import System.FilePath.Posix as Posix
 
 data Args
     = Parallelise ParalleliseOpts CommonOpts
@@ -29,12 +33,49 @@ newtype GraphOpts = GraphOpts
     }
     deriving Show
 
-data ParalleliseOpts
+data ParType
     = ParSequential
     | ParAll
     | ParFunction
     | ParPathed
     deriving Show
+
+data ParalleliseOpts = ParallelOpts
+    { parType :: ParType
+    , parOut :: Maybe String
+    }
+    deriving Show
+
+fileName :: Args -> String
+fileName (Parallelise _ copts)
+    = optFile copts
+fileName (Graph _ copts)
+    = optFile copts
+
+toContext :: Args -> Context
+toContext (Parallelise popts copts)
+    = Context
+        { ctxSteps = optSteps copts
+        , ctxAtomic = optAtomic copts
+        , ctxRedundant = optRedundant copts
+        , ctxParType = fromParType (parType popts)
+        , ctxDrawAll = False
+        , ctxOutput = Maybe.fromMaybe ("./out/par_" ++ Posix.takeFileName (optFile copts)) (parOut popts)
+        }
+    where
+        fromParType ParSequential = Sequentially
+        fromParType ParAll = AllParallel
+        fromParType ParFunction = FunctionOnly
+        fromParType ParPathed = Pathed
+toContext (Graph gopts copts)
+    = Context
+        { ctxSteps = optSteps copts
+        , ctxAtomic = optAtomic copts
+        , ctxRedundant = optRedundant copts
+        , ctxParType = None
+        , ctxDrawAll = graphAll gopts
+        , ctxOutput = ""
+        }
 
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts
@@ -62,22 +103,30 @@ parseCommonOpts
            <> help
                 ("Whether to keep redundant arcs when building the dependency graph. "
                 ++ "This is likely to create a more cluttered graph, but should not affect the amount of parallelism actually exposed.")
-            )
+        )
 
 parseParallelise :: Parser Args
 parseParallelise = Parallelise <$> parseParalleliseOpts <*> parseCommonOpts
 
 parseParalleliseOpts :: Parser ParalleliseOpts
-parseParalleliseOpts =
-    subparser (
-       command "all"
-         (info (pure ParAll) (progDesc "Encode parallelisable functions with maximum parallelisation."))
-      <> command "seq"
-         (info (pure ParSequential) (progDesc "Encode parallelisable functions with no parallelisation (for testing correctness)."))
-      <> command "function"
-         (info (pure ParFunction) (progDesc "Encode parallelisable functions with only function calls parallelised."))
-      <> command "pathed"
-         (info (pure ParPathed) (progDesc "Encode parallelisable functions with only function calls parallelised, and leaving one path sequential for the main thread.")))
+parseParalleliseOpts
+    = ParallelOpts
+        <$> subparser 
+            ( command "all"
+                (info (pure ParAll) (progDesc "Encode parallelisable functions with maximum parallelisation."))
+           <> command "seq"
+                (info (pure ParSequential) (progDesc "Encode parallelisable functions with no parallelisation (for testing correctness)."))
+           <> command "function"
+                (info (pure ParFunction) (progDesc "Encode parallelisable functions with only function calls parallelised."))
+           <> command "pathed"
+                (info (pure ParPathed) (progDesc "Encode parallelisable functions with only function calls parallelised, and leaving one path sequential for the main thread.")))
+        <*> optional 
+            ( strOption 
+                ( long "output-file" 
+               <> short 'o'
+               <> metavar "FILENAME"
+               <> help "Output file name"
+               ))
     <**> helper
 
 parseGraph :: Parser Args

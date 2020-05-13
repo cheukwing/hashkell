@@ -11,6 +11,7 @@ import Middleend
     , DExpr(..)
     , DLit(..)
     )
+import Context
 
 import Prelude hiding (EQ, LT, GT)
 import Data.List (intercalate)
@@ -34,8 +35,8 @@ type Code = String
 header = "import Control.Parallel\nimport Control.Parallel.Strategies"
 
 -- encode translates each encoding instruction into code
-encode :: EncodingInstructionTable -> Code
-encode 
+encode :: Context -> EncodingInstructionTable -> Code
+encode ctx
     = intercalate "\n\n" . (:) header . map encode' . Map.toList
     where
         -- encoding the type signature
@@ -53,7 +54,7 @@ encode
         encode' (name, Parallel mts params dg)
             = typeSignature name mts 
                 ++ definition name params 
-                ++ graphToCode dg True
+                ++ graphToCode (ctxParType ctx) dg
 
 --- Expr Code Generation ---
 
@@ -244,21 +245,19 @@ updateGeneratedNames gn = do
 
 -- graphToCode generates code from the given dependency graph,
 -- either encoding it sequentially if False, else parallelised.
-graphToCode :: DependencyGraph -> Bool -> Code
-graphToCode g False
+graphToCode :: ParallelisationStrategy -> DependencyGraph -> Code
+graphToCode Sequentially g
     = snd $ evalState (graphToSequentialCode "_") 
         (BasicState g Set.empty)
-graphToCode g True
-{-
+graphToCode AllParallel g 
     = snd $ evalState (graphToParallelCodeAll "_")
         (BasicState g Set.empty)
--}
+graphToCode FunctionOnly g
     = snd $ evalState (graphToParallelCodeCalls "_")
         (ScopedState g Set.empty False)
-{-
+graphToCode Pathed g
     = code
     where (_, code, _) = evalState (graphToParallelCodePathed "_") (ScopedState g Set.empty False)
--}
 
 
 graphToSequentialCode :: Name -> State GenerationState (Name, Code)

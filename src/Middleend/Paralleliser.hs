@@ -79,7 +79,7 @@ createEncodingInstructionTable :: Context -> FunctionTable -> EncodingInstructio
 createEncodingInstructionTable ctx ft
     = foldl aggToInstr Map.empty . Map.toList $ ft
     where
-        (parTable, triTable) = parAndTriTables (boundarySteps ctx) ft
+        (parTable, triTable) = parAndTriTables (ctxSteps ctx) ft
         aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
         -- If there is no definition, do not bother encoding ft all
         aggToInstr eit (_, (_, _, Nothing))
@@ -119,7 +119,7 @@ createEncodingInstructionTableAll :: Context -> FunctionTable -> EncodingInstruc
 createEncodingInstructionTableAll ctx ft
     = foldl aggToInstr Map.empty . Map.toList $ ft
     where
-        (_, triTable) = parAndTriTables (boundarySteps ctx) ft
+        (_, triTable) = parAndTriTables (ctxSteps ctx) ft
         aggToInstr :: EncodingInstructionTable -> (Name, FunctionData) -> EncodingInstructionTable
         aggToInstr eit (_, (_, _, Nothing))
             = eit

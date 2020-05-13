@@ -2,7 +2,18 @@ module Context where
 
 type Steps = Int
 data Context = Context
-    { boundarySteps    :: Steps
-    , fewerAtomicNodes :: Bool
-    , noRedundantArcs  :: Bool
+    { ctxSteps :: Steps
+    , ctxAtomic :: Bool
+    , ctxRedundant :: Bool
+    , ctxParType :: ParallelisationStrategy
+    , ctxDrawAll :: Bool
+    , ctxOutput :: String
     }
+
+data ParallelisationStrategy
+    = Sequentially
+    | AllParallel
+    | FunctionOnly
+    | Pathed
+    | None
+    deriving Eq
