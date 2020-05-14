@@ -32,7 +32,7 @@ import qualified Data.Maybe as Maybe
 type Code = String
 
 -- header gives the imports for the parallelisation functions
-header = "import Control.Parallel\nimport Control.Parallel.Strategies"
+header = "{-# LANGUAGE BangPatterns #-}\nimport Control.Parallel\nimport Control.Parallel.Strategies"
 
 -- encode translates each encoding instruction into code
 encode :: Context -> EncodingInstructionTable -> Code
@@ -45,7 +45,8 @@ encode ctx
                             . flip (++) "\n" 
                             . signatureToCode)
         -- encoding the definition signature
-        definition    = (flip (++) " = " .) . (unwords .) . (:)
+        --definition    = (flip (++) " = " .) . (unwords .) . (:)
+        definition n ps = unwords (n : map ((:) '!') ps) ++ " = "
         encode' :: (Name, EncodingInstruction) -> Code
         encode' (name, Sequential mts params e)
             = typeSignature name mts 
@@ -370,7 +371,7 @@ graphToParallelCodeAll name = do
                     DHighApp _ DApp{} _ ->
                         name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
                     _ ->
-                        name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                        name ++ " <- rparWith rdeepseq " ++ parenthesisedDExprToCode e
             if null code
                 then return (lastName, expCode)
                 else return (lastName, expCode ++ "; " ++ code)
@@ -378,7 +379,7 @@ graphToParallelCodeAll name = do
             (_, thenCode) <- getBranch name DepThen >>= graphToParallelCodeAll
             (_, elseCode) <- getBranch name DepElse >>= graphToParallelCodeAll
             (lastName, code) <- generateChildren
-            let condCode = name ++ " <- rpar (if " ++ dexprToCode e 
+            let condCode = name ++ " <- rparWith rdeepseq (if " ++ dexprToCode e 
                             ++ " then " ++ thenCode 
                             ++ " else " ++ elseCode  ++ ")"
                 endCode = if null code then condCode else condCode ++ "; " ++ code
@@ -409,7 +410,7 @@ graphToParallelCodeCalls name = do
             let expCode = if par
                     then case e of
                         DApp{} ->
-                            name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                            name ++ " <- rparWith rdeepseq " ++ parenthesisedDExprToCode e
                         DHighApp _ DApp{} _ ->
                             name ++ " <- parList rdeepseq " ++ parenthesisedDExprToCode e
                         _ ->
@@ -466,7 +467,7 @@ graphToParallelCodePathed name = do
                         -- parallelise function calls if in parallelised scope
                         -- and alternative path
                         (True, True, DApp{}) ->
-                            name ++ " <- rpar " ++ parenthesisedDExprToCode e
+                            name ++ " <- rparWith rdeepseq " ++ parenthesisedDExprToCode e
                         -- do not parallelise if in a parallelised scope but
                         -- in the main path
                         (True, _, _) ->

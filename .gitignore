@@ -2,3 +2,4 @@
 simple-haskell.cabal
 *~
 out/
+examples/evaluation/
