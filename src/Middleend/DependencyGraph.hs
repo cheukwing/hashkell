@@ -176,30 +176,6 @@ depName = do
     return name
 
 
--- atomicToDExpr returns a DExpr if the expression is atomic, else Nothing
--- atomic function calls are handled separately in buildExpr because they may
--- contain non-atomic arguments which need nodes to be built
-{-
-atomicToDExpr :: Expr -> Maybe DExpr
-atomicToDExpr (Lit (LInt i))
-    = return $ DLit (DInt i)
-atomicToDExpr (Lit (LBool b))
-    = return $ DLit (DBool b)
-atomicToDExpr (Lit (LList ls)) = do
-    let ls' = Maybe.mapMaybe atomicToDExpr ls
-    if length ls' /= length ls
-        then Nothing
-        else return $ DLit (DList ls')
-atomicToDExpr (Var n)
-    = return $ DVar n
-atomicToDExpr (Op op e1 e2) = do
-    e1' <- atomicToDExpr e1
-    e2' <- atomicToDExpr e2
-    return $ DOp op e1' e2'
-atomicToDExpr _
-    = Nothing
--}
-    
 -- dependenciesFromDExpr returns all the names of the dependencies of the
 -- given DExpr
 dependenciesFromDExpr :: DExpr -> [Name]
@@ -244,19 +220,6 @@ collectApp (App e1 e2)
     = (name, es ++ [e2])
     where (name, es) = collectApp e1
 
-
--- buildExpr combines several operations expressions so that they will
--- appear as a single node, avoiding nodes for each bracketing
--- as in e.g. ((x + y) + z) + w causing 3 nodes
-{-
-buildExpr :: Expr -> State BuildingState DExpr
-buildExpr (Op op e1 e2) = do
-    ma <- mergeAtomic <$> get
-    let build = if ma then buildExpr else buildExpr
-    DOp op <$> build e1 <*> build e2
-buildExpr e
-    = buildExpr e
--}
 
 -- isTrivialFunction returns True if the given name is the name of an atomic
 -- function, i.e. a O(1) in-built function, or of a function which the user
