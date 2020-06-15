@@ -16,10 +16,10 @@ stack test # to test
 
 ## Usage
 
-To parallelise an input file `code.hs` with the _function-only_ strategy:
+To parallelise an input file `code.hs` with the _func_ method:
 
 ```bash
-stack run -- parallelise function code.hs
+stack run -- parallelise func code.hs
 ```
 
 To graph all the functions in an input file `code.hs`:

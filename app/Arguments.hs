@@ -112,9 +112,9 @@ parseParalleliseOpts
                 (info (pure ParAll) (progDesc "Encode parallelisable functions with maximum parallelisation."))
            <> command "seq"
                 (info (pure ParSequential) (progDesc "Encode parallelisable functions with no parallelisation (for testing correctness)."))
-           <> command "function"
+           <> command "func"
                 (info (pure ParFunction) (progDesc "Encode parallelisable functions with only function calls parallelised."))
-           <> command "pathed"
+           <> command "path"
                 (info (pure ParPathed) (progDesc "Encode parallelisable functions with only function calls parallelised, and leaving one path sequential for the main thread.")))
         <*> optional 
             ( strOption 

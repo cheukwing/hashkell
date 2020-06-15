@@ -198,11 +198,8 @@ dependenciesFromDExpr (DHighApp _ e es)
 -- and DExpr
 setupDependencies :: Name -> DExpr -> State BuildingState ()
 setupDependencies name dexpr = do
-    let parents = dependenciesFromDExpr dexpr
-    if null parents
-        -- add a scope dependency to ensure that they stay within their scope
-        then addScopeDependency name
-        else mapM_ (addDependency name) parents >> addScopeDependency name
+    addScopeDependency name
+    mapM_ (addDependency name) (dependenciesFromDExpr dexpr)
 
 -- setupExpressionNode setups up the creation of a node and its dependencies
 setupExpressionNode :: Name -> DExpr -> State BuildingState ()
@@ -302,7 +299,7 @@ buildGraphWithName mn e @ App{} = do
     dexpr <- if isTrivial
         -- if trivial -> DAtomApp
         then DAtomApp fName <$> mapM buildExpr args
-        else if fName `elem` ["map", "zipWith"]
+        else if fName `elem` ["map", "zipWith", "filter"]
             then do
                 let (fName', args') = case a of 
                         App{} -> collectApp a 
